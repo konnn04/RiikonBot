@@ -1,0 +1,46 @@
+{
+  "name": "riikonbot",
+  "version": "1.0.0",
+  "description": "Riikon's discord bot",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node dist/index.js",
+    "dev": "nodemon src/index.js --exec babel-node",
+    "build": "babel src -d dist",
+    "lint": "eslint src/**/*.js",
+    "update": "node src/utils/updateCommands.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Riikon-Team/RiikonBot.git"
+  },
+  "author": "Riikon",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/Riikon-Team/RiikonBot/issues"
+  },
+  "homepage": "https://github.com/Riikon-Team/RiikonBot#readme",
+  "dependencies": {
+    "discord.js": "^14.14.1",
+    "express": "^4.18.2",
+    "express-session": "^1.17.3",
+    "passport": "^0.6.0",
+    "passport-discord": "^0.1.4",
+    "sqlite3": "^5.1.6",
+    "sequelize": "^6.35.1",
+    "ejs": "^3.1.9",
+    "dotenv": "^16.3.1",
+    "winston": "^3.11.0",
+    "cors": "^2.8.5",
+    "helmet": "^7.1.0"
+  },
+  "devDependencies": {
+    "@babel/cli": "^7.23.4",
+    "@babel/core": "^7.23.5",
+    "@babel/node": "^7.22.19",
+    "@babel/preset-env": "^7.23.5",
+    "eslint": "^8.55.0",
+    "nodemon": "^3.0.2"
+  }
+}
