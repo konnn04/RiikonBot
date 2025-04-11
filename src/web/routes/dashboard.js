@@ -6,6 +6,7 @@ const router = express.Router();
 // Main dashboard page
 router.get('/', (req, res) => {
   const packages = req.packageManager.getAllPackages();
+  const webRoutes = req.packageManager.getWebRoutes();
   
   res.render('dashboard', {
     user: req.user,
@@ -14,7 +15,8 @@ router.get('/', (req, res) => {
       uptime: req.discordClient.uptime,
       serverCount: req.discordClient.guilds.cache.size,
       status: req.discordClient.user.presence.status
-    }
+    },
+    webRoutes: webRoutes
   });
 });
 
@@ -27,7 +29,8 @@ router.get('/packages/:name', async (req, res) => {
   if (!packageData) {
     return res.status(404).render('error', {
       error: 'Package not found',
-      message: `The package "${name}" does not exist.`
+      message: `The package "${name}" does not exist.`,
+      user: req.user
     });
   }
   
@@ -43,7 +46,8 @@ router.get('/packages/:name/config', (req, res, next) => {
   if (!req.user.isAdmin) {
     return res.status(403).render('error', {
       error: 'Access denied',
-      message: 'You need admin permissions to access this page.'
+      message: 'You need admin permissions to access this page.',
+      user: req.user
     });
   }
   
@@ -54,7 +58,8 @@ router.get('/packages/:name/config', (req, res, next) => {
   if (!packageData) {
     return res.status(404).render('error', {
       error: 'Package not found',
-      message: `The package "${name}" does not exist.`
+      message: `The package "${name}" does not exist.`,
+      user: req.user
     });
   }
   

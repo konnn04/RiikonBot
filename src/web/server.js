@@ -13,6 +13,7 @@ import authRoutes from './routes/auth.js';
 import dashboardRoutes from './routes/dashboard.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const REACT_BUILD_PATH = path.join(__dirname, '../../client/build');
 
 export async function startWeb(client, packageManager) {
   const app = express();
@@ -26,18 +27,19 @@ export async function startWeb(client, packageManager) {
         scriptSrc: ["'self'", "'unsafe-inline'", 'cdn.jsdelivr.net'],
         styleSrc: ["'self'", "'unsafe-inline'", 'cdn.jsdelivr.net'],
         imgSrc: ["'self'", 'cdn.discordapp.com', 'data:'],
+        connectSrc: ["'self'", 'discord.com']
       },
     }
   }));
   app.use(cors({ origin: process.env.CORS_ORIGIN || true, credentials: true }));
   
-  // Setup view engine
-  app.set('view engine', 'ejs');
-  app.set('views', path.join(__dirname, 'views'));
-  
   // Body parser middleware
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
+  
+  // Set up view engine - THIS IS THE CRITICAL ADDITION
+  app.set('view engine', 'ejs');
+  app.set('views', path.join(__dirname, 'views'));
   
   // Static files
   app.use(express.static(path.join(__dirname, 'public')));
@@ -61,7 +63,7 @@ export async function startWeb(client, packageManager) {
   passport.use(new DiscordStrategy({
     clientID: process.env.DISCORD_CLIENT_ID,
     clientSecret: process.env.DISCORD_CLIENT_SECRET,
-    callbackURL: process.env.CALLBACK_URL || `http://localhost:${process.env.PORT}/auth/discord/callback`,
+    callbackURL: process.env.CALLBACK_URL || `http://localhost:${PORT}/auth/discord/callback`,
     scope: ['identify']
   }, async (accessToken, refreshToken, profile, done) => {
     try {
@@ -143,6 +145,13 @@ export async function startWeb(client, packageManager) {
   app.use('/api', apiRoutes);
   app.use('/dashboard', checkAuth, dashboardRoutes);
   
+  // Add root route handler
+  app.get('/', (req, res) => {
+    res.render('home', {
+      user: req.user
+    });
+  });
+  
   // Admin routes
   app.use('/admin', checkAuth, checkAdmin, (req, res) => {
     res.render('admin', {
@@ -151,18 +160,73 @@ export async function startWeb(client, packageManager) {
     });
   });
   
-  // Root route
-  app.get('/', (req, res) => {
-    res.render('index', {
-      user: req.user,
-      isAuthenticated: req.isAuthenticated()
-    });
+  // Register package web routes
+  const webRoutes = packageManager.getWebRoutes();
+  webRoutes.forEach((routeInfo, packageName) => {
+    const pkg = packageManager.packages.get(packageName);
+    if (pkg && pkg.enabled) {
+      // For API routes
+      const apiBasePath = `/api/packages/${packageName}`;
+      app.use(apiBasePath, checkAuth, routeInfo.handler);
+      logger.info(`Registered API route for package ${packageName} at ${apiBasePath}`);
+      
+      // For package-specific web routes
+      if (routeInfo.views) {
+        const webBasePath = `/packages/${packageName}`;
+        // Create a new router for the package's web routes
+        const packageRouter = express.Router();
+        
+        // Add middleware to use package-specific views
+        packageRouter.use((req, res, next) => {
+          const originalRender = res.render;
+          res.render = function(view, options, callback) {
+            const opts = { ...options };
+            // Set package-specific views folder
+            const originalViewPath = app.get('views');
+            app.set('views', routeInfo.views);
+            
+            originalRender.call(this, view, opts, (err, html) => {
+              // Restore original views path
+              app.set('views', originalViewPath);
+              
+              if (err) {
+                logger.error(`Error rendering package view ${view}:`, err);
+                // Try fallback to default views
+                originalRender.call(this, view, opts, callback);
+              } else if (callback) {
+                callback(null, html);
+              } else {
+                this.send(html);
+              }
+            });
+          };
+          next();
+        });
+        
+        // Use the package's routes with the package router
+        packageRouter.use(routeInfo.handler);
+        
+        // Mount the package router
+        app.use(webBasePath, checkAuth, packageRouter);
+        logger.info(`Registered web route for package ${packageName} at ${webBasePath}`);
+      }
+    }
   });
+
+  // Serve React static files in production
+  if (process.env.NODE_ENV === 'production') {
+    app.use(express.static(REACT_BUILD_PATH));
+    
+    // All other GET requests not handled before will return the React app
+    app.get('*', (req, res) => {
+      res.sendFile(path.join(REACT_BUILD_PATH, 'index.html'));
+    });
+  }
   
   // Error handling
   app.use((err, req, res, next) => {
     logger.error('Server error:', err);
-    res.status(500).render('error', {
+    res.status(500).json({
       error: 'Server Error',
       message: process.env.NODE_ENV === 'production' ? 'Something went wrong' : err.message
     });

@@ -6,11 +6,15 @@ import logger from '../utils/logger.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PACKAGES_DIR = path.join(__dirname, 'available');
+// Define packages to be excluded because their functionality is included in standard package
+const EXCLUDED_PACKAGES = ['help', 'ping-pong'];
 
 class PackageManager {
   constructor() {
     this.packages = new Map();
     this.events = new Map();
+    this.webRoutes = new Map();
+    this.defaultPackage = null;
   }
   
   // Register an event listener from a package
@@ -25,6 +29,23 @@ class PackageManager {
     });
     
     logger.debug(`Package ${packageName} registered event listener for ${eventName}`);
+  }
+  
+  // Register a web route for a package
+  registerWebRoute(routePath, routeHandler, packageName, viewsPath = null) {
+    this.webRoutes.set(packageName, {
+      path: routePath,
+      handler: routeHandler,
+      views: viewsPath // Store the path to package-specific views
+    });
+    
+    logger.debug(`Package ${packageName} registered web route at ${routePath}`);
+    return true;
+  }
+  
+  // Get all web routes
+  getWebRoutes() {
+    return this.webRoutes;
   }
   
   // Emit an event to all registered listeners
@@ -52,18 +73,24 @@ class PackageManager {
       const packageJson = JSON.parse(fs.readFileSync(path.join(packageDir, 'package.json'), 'utf8'));
       const packageName = packageJson.name;
       
+      // Skip excluded packages
+      if (EXCLUDED_PACKAGES.includes(packageName)) {
+        logger.info(`Skipping package ${packageName} as its functionality is included in standard package`);
+        return null;
+      }
+      
       // Check if package exists in database, create if not
       let [pkgEntity] = await Package.findOrCreate({
         where: { name: packageName },
         defaults: {
           version: packageJson.version,
           enabled: true,
-          config: packageJson.defaultConfig || {}
+          config: packageJson.config || {}
         }
       });
       
       // Import the package's main file - Convert Windows path to file:// URL
-      const mainFilePath = path.join(packageDir, packageJson.main);
+      const mainFilePath = path.join(packageDir, packageJson.main || 'index.js');
       const packageModule = await import(pathToFileURL(mainFilePath).href);
       
       // Store the package in our map
@@ -73,8 +100,15 @@ class PackageManager {
         enabled: pkgEntity.enabled,
         config: pkgEntity.config,
         module: packageModule,
-        manifest: packageJson
+        manifest: packageJson,
+        isDefault: packageJson.isDefault || false
       });
+      
+      // Check if this is the default package
+      if (packageJson.isDefault) {
+        this.defaultPackage = packageName;
+        logger.info(`Set ${packageName} as the default package`);
+      }
       
       logger.info(`Loaded package: ${packageName} v${packageJson.version}`);
       return packageName;
@@ -86,8 +120,22 @@ class PackageManager {
   
   // Initialize all loaded packages
   async initializePackages(client) {
+    // First initialize the default package if it exists
+    if (this.defaultPackage) {
+      const pkg = this.packages.get(this.defaultPackage);
+      if (pkg && pkg.enabled && pkg.module.initialize) {
+        try {
+          await pkg.module.initialize(client, this, pkg.config);
+          logger.info(`Initialized default package: ${this.defaultPackage}`);
+        } catch (error) {
+          logger.error(`Failed to initialize default package ${this.defaultPackage}:`, error);
+        }
+      }
+    }
+    
+    // Then initialize other packages
     for (const [name, pkg] of this.packages) {
-      if (pkg.enabled && pkg.module.initialize) {
+      if (name !== this.defaultPackage && pkg.enabled && pkg.module.initialize) {
         try {
           await pkg.module.initialize(client, this, pkg.config);
           logger.info(`Initialized package: ${name}`);
@@ -132,8 +180,16 @@ class PackageManager {
       version: pkg.version,
       enabled: pkg.enabled,
       description: pkg.manifest.description,
-      author: pkg.manifest.author
+      author: pkg.manifest.author,
+      config: pkg.config,
+      route: pkg.manifest.route || null,
+      isDefault: pkg.manifest.isDefault || false
     }));
+  }
+  
+  // Get the default package
+  getDefaultPackage() {
+    return this.defaultPackage ? this.packages.get(this.defaultPackage) : null;
   }
 }
 
@@ -146,10 +202,12 @@ export async function loadPackages() {
     fs.mkdirSync(PACKAGES_DIR, { recursive: true });
   }
   
-  // Load each package in the directory
+  // Load each package in the directory, filtering out excluded packages
   const packageDirs = fs.readdirSync(PACKAGES_DIR, { withFileTypes: true })
-    .filter(dirent => dirent.isDirectory())
+    .filter(dirent => dirent.isDirectory() && !EXCLUDED_PACKAGES.includes(dirent.name))
     .map(dirent => path.join(PACKAGES_DIR, dirent.name));
+  
+  logger.info(`Found ${packageDirs.length} packages to load. Excluded: ${EXCLUDED_PACKAGES.join(', ')}`);
   
   for (const packageDir of packageDirs) {
     await packageManager.loadPackage(packageDir);

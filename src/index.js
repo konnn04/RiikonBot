@@ -10,17 +10,23 @@ dotenv.config();
 
 async function initialize() {
   try {
-    // Setup database first
+    logger.info("Starting RiikonBot...");
+    
+    // 1. Setup database first
+    logger.info("Setting up database...");
     await setupDatabase();
     
-    // Load and initialize all packages
-    const packages = await loadPackages();
+    // 2. Load and initialize all packages
+    logger.info("Loading packages...");
+    const packageManager = await loadPackages();
     
-    // Start Discord bot
-    const client = await startBot(packages);
+    // 3. Start Discord bot
+    logger.info("Starting Discord bot...");
+    const client = await startBot(packageManager);
     
-    // Start web server
-    await startWeb(client, packages);
+    // 4. Start web server
+    logger.info("Starting web server...");
+    await startWeb(client, packageManager);
     
     logger.info('RiikonBot successfully initialized');
   } catch (error) {
@@ -29,4 +35,5 @@ async function initialize() {
   }
 }
 
+// Run the initialization process
 initialize();

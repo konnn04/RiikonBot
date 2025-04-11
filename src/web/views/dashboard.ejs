@@ -1,64 +1,92 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-bs-theme="dark">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dashboard - RiikonBot</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="/css/style.css">
+  <%- include('components/head', { title: 'Dashboard' }) %>
 </head>
-<body>
-  <%- include('partials/navbar', { user: user }) %>
+<body class="d-flex flex-column min-vh-100 bg-dark text-light">
+  <%- include('components/header', { user: user }) %>
   
-  <div class="container mt-4">
-    <h1>Dashboard</h1>
-    
-    <div class="row mt-4">
-      <div class="col-md-4">
-        <div class="card mb-4">
-          <div class="card-header">
-            <h5 class="mb-0">Bot Status</h5>
-          </div>
-          <div class="card-body">
-            <p><strong>Status:</strong> <span class="badge bg-success">Online</span></p>
-            <p><strong>Uptime:</strong> <%= Math.floor(botStatus.uptime / 3600000) %>h <%= Math.floor((botStatus.uptime % 3600000) / 60000) %>m</p>
-            <p><strong>Servers:</strong> <%= botStatus.serverCount %></p>
+  <main class="flex-grow-1">
+    <div class="container py-4">
+      <h1 class="mb-4"><span class="text-gradient">Dashboard</span></h1>
+      
+      <div class="row mt-4">
+        <div class="col-md-4">
+          <div class="card mb-4">
+            <div class="card-header d-flex align-items-center">
+              <i class="bi bi-activity me-2"></i>
+              <h5 class="mb-0">Bot Status</h5>
+            </div>
+            <div class="card-body">
+              <div class="d-flex justify-content-between mb-3">
+                <span><strong>Status:</strong></span>
+                <span class="badge bg-success">Online</span>
+              </div>
+              <div class="d-flex justify-content-between mb-3">
+                <span><strong>Uptime:</strong></span>
+                <span><%= Math.floor(botStatus.uptime / 3600000) %>h <%= Math.floor((botStatus.uptime % 3600000) / 60000) %>m</span>
+              </div>
+              <div class="d-flex justify-content-between">
+                <span><strong>Servers:</strong></span>
+                <span class="badge bg-primary"><%= botStatus.serverCount %></span>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
-      
-      <div class="col-md-8">
-        <div class="card">
-          <div class="card-header d-flex justify-content-between align-items-center">
-            <h5 class="mb-0">Installed Packages</h5>
-            <% if (user.isAdmin) { %>
-              <a href="/admin" class="btn btn-sm btn-primary">Manage Packages</a>
-            <% } %>
-          </div>
-          <div class="card-body">
-            <% if (packages && packages.length > 0) { %>
-              <div class="list-group">
-                <% packages.forEach(pkg => { %>
-                  <a href="/dashboard/packages/<%= pkg.name %>" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-                    <div>
-                      <h6 class="mb-1"><%= pkg.name %></h6>
-                      <p class="mb-1 text-muted small"><%= pkg.description %></p>
-                    </div>
-                    <span class="badge <%= pkg.enabled ? 'bg-success' : 'bg-secondary' %> rounded-pill">
-                      <%= pkg.enabled ? 'Enabled' : 'Disabled' %>
-                    </span>
-                  </a>
-                <% }); %>
+        
+        <div class="col-md-8">
+          <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <div class="d-flex align-items-center">
+                <i class="bi bi-box me-2"></i>
+                <h5 class="mb-0">Installed Packages</h5>
               </div>
-            <% } else { %>
-              <p class="text-center text-muted">No packages installed</p>
-            <% } %>
+              <% if (user && user.isAdmin) { %>
+                <a href="/admin" class="btn btn-sm btn-primary">
+                  <i class="bi bi-gear-fill me-1"></i>Manage Packages
+                </a>
+              <% } %>
+            </div>
+            <div class="card-body">
+              <% if (packages && packages.length > 0) { %>
+                <div class="list-group">
+                  <% packages.forEach(pkg => { %>
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                      <div>
+                        <h6 class="mb-1 text-gradient"><%= pkg.name %></h6>
+                        <p class="mb-1 text-secondary small"><%= pkg.description %></p>
+                      </div>
+                      <div class="d-flex gap-2">
+                        <% if (pkg.enabled && webRoutes && webRoutes.has(pkg.name)) { %>
+                          <a href="/packages/<%= pkg.name %>" class="btn btn-sm btn-primary">
+                            <i class="bi bi-gear"></i> Configure
+                          </a>
+                        <% } %>
+                        <a href="/dashboard/packages/<%= pkg.name %>" class="btn btn-sm btn-outline-light">
+                          <i class="bi bi-info-circle"></i> Details
+                        </a>
+                        <span class="badge <%= pkg.enabled ? 'bg-success' : 'bg-secondary' %> rounded-pill">
+                          <%= pkg.enabled ? 'Enabled' : 'Disabled' %>
+                        </span>
+                      </div>
+                    </div>
+                  <% }); %>
+                </div>
+              <% } else { %>
+                <div class="text-center p-4">
+                  <i class="bi bi-box fs-1 text-secondary mb-3"></i>
+                  <p class="text-secondary">No packages installed</p>
+                  <a href="/admin" class="btn btn-primary btn-sm">Install Packages</a>
+                </div>
+              <% } %>
+            </div>
           </div>
         </div>
       </div>
     </div>
-  </div>
+  </main>
   
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <%- include('components/footer') %>
+  <%- include('components/scripts') %>
 </body>
 </html>

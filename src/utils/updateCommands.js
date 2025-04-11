@@ -40,20 +40,48 @@ async function collectCommands() {
     logger.info(`Processing package: ${packageName}`);
     
     try {
-      // Look for slashCommands.js file in the package
-      const slashCommandsPath = path.join(packageDir, 'slashCommands.js');
+      // Look for commands directory in the package
+      const commandsDir = path.join(packageDir, 'commands');
       
-      if (fs.existsSync(slashCommandsPath)) {
-        // Import the slash commands file
-        const { getCommands } = await import(pathToFileURL(slashCommandsPath).href);
-        const packageCommands = await getCommands();
+      if (fs.existsSync(commandsDir)) {
+        // Look for a slashCommands.js file for backward compatibility
+        const slashCommandsPath = path.join(packageDir, 'slashCommands.js');
         
-        if (Array.isArray(packageCommands) && packageCommands.length > 0) {
-          commands.push(...packageCommands);
-          logger.info(`Added ${packageCommands.length} commands from ${packageName}`);
+        if (fs.existsSync(slashCommandsPath)) {
+          // Import the slash commands file
+          const { getCommands } = await import(pathToFileURL(slashCommandsPath).href);
+          const packageCommands = await getCommands();
+          
+          if (Array.isArray(packageCommands) && packageCommands.length > 0) {
+            commands.push(...packageCommands);
+            logger.info(`Added ${packageCommands.length} commands from ${packageName} via slashCommands.js`);
+          }
+        } else {
+          // Process command files in the commands directory
+          const commandFiles = fs.readdirSync(commandsDir)
+            .filter(file => file.endsWith('.js') && file !== 'index.js');
+            
+          for (const file of commandFiles) {
+            try {
+              const commandPath = path.join(commandsDir, file);
+              const commandModule = await import(pathToFileURL(commandPath).href);
+              
+              if (commandModule.config && commandModule.config.name) {
+                commands.push({
+                  name: commandModule.config.name,
+                  description: commandModule.config.description || 'No description provided',
+                  options: commandModule.config.options || []
+                });
+                
+                logger.info(`Added command ${commandModule.config.name} from ${packageName}`);
+              }
+            } catch (error) {
+              logger.error(`Error loading command from ${file} in ${packageName}:`, error);
+            }
+          }
         }
       } else {
-        logger.info(`No slashCommands.js found in ${packageName}`);
+        logger.info(`No commands directory found in ${packageName}`);
       }
     } catch (error) {
       logger.error(`Error processing commands from ${packageName}:`, error);
