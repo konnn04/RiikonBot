@@ -242,13 +242,13 @@ export default {
 
 <style scoped>
 .example-command {
-  background-color: var(--darker);
+  background-color: var(--lighter);
   border-left: 3px solid var(--primary);
 }
 
 code {
-  color: var(--light);
-  background-color: var(--darker);
+  color: var(--primary);
+  background-color: #ff8c3f17;
   padding: 2px 4px;
   border-radius: 3px;
 }

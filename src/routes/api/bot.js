@@ -13,7 +13,11 @@ router.get('/bot', isAuthenticated, async (req, res) => {
       username: client.user.username,
       id: client.user.id,
       guilds: client.guilds.cache.size,
-      users: client.users.cache.size
+      users: client.users.cache.size,
+      avatar: client.user.displayAvatarURL({ dynamic: true, size: 1024 }),
+      status: client.user.presence?.status || 'offline',
+      activity: client.user.presence?.activities[0] || null,
+      createdAt: client.user.createdAt,
     });
   } catch (error) {
     logger.error('Error fetching bot info:', error);

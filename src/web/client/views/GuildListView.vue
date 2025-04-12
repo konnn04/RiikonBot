@@ -57,13 +57,13 @@
             <div class="row g-0 mb-3">
               <div class="col-6 border-end">
                 <div class="text-center p-2">
-                  <h6 class="mb-0">{{ guild.stats?.totalMembers || guild.memberCount }}</h6>
+                  <h6 class="mb-0">{{ guild.stats?.memberCount || guild.stats?.members?.total }}</h6>
                   <small class="text-muted">Members</small>
                 </div>
               </div>
               <div class="col-6">
                 <div class="text-center p-2">
-                  <h6 class="mb-0">{{ guild.stats?.onlineMembers || 'N/A' }}</h6>
+                  <h6 class="mb-0">{{ guild.stats?.onlineMembers || "Hidden" }}</h6>
                   <small class="text-muted">Online</small>
                 </div>
               </div>
@@ -73,7 +73,7 @@
             <div class="server-details mb-3">
               <div class="d-flex justify-content-between mb-2">
                 <span class="text-muted">ID:</span>
-                <span class="text-truncate ms-2">{{ guild.id }}</span>
+                <span class="text-truncate ms-2"><text-copy :text="guild.id" /></span>
               </div>
               <div class="d-flex justify-content-between mb-2">
                 <span class="text-muted">Prefix:</span>
@@ -102,8 +102,12 @@
 </template>
 
 <script>
+import TextCopy from '../components/ui/TextCopy.vue';
 export default {
   name: 'GuildListView',
+  components: {
+    TextCopy
+  },
   data() {
     return {
       loading: true,

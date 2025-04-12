@@ -42,3 +42,11 @@ export default {
   }
 }
 </script>
+
+<style>
+  div.card {
+    background-color: var(--card-background);
+    color: var(--text-color-card)!important;
+    border: 1px solid var(--card-border);
+  }
+</style>

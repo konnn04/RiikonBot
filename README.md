@@ -79,8 +79,8 @@ RiikonBot is a powerful, modular Discord bot built with extensibility in mind. I
    # Web Dashboard
    DASHBOARD_ENABLED=true
    DASHBOARD_PORT=3100
-   DASHBOARD_SECRET=some_random_string
-   DISCORD_OAUTH_CLIENT_SECRET=your_client_secret
+   DASHBOARD_SECRET=some_random_string  # Random string for session security
+   DISCORD_OAUTH_CLIENT_SECRET=your_client_secret  # From Discord Developer Portal
    
    # Telegram Integration (optional)
    TELEGRAM_ENABLED=false
@@ -126,10 +126,10 @@ RiikonBot uses a modular package system that allows you to add, remove, or modif
 
 Each package has four main lifecycle methods:
 
-- `initialize`: Called when the bot starts up
-- `onEnable`: Called when the package is enabled
-- `onDisable`: Called when the package is disabled
-- `onConfigUpdate`: Called when the package configuration is updated
+- `initialize`: Called when the bot starts up, used for setup and resource loading
+- `onEnable`: Called when the package is enabled, ideal for starting services
+- `onDisable`: Called when the package is disabled, used for cleanup
+- `onConfigUpdate`: Called when the package configuration is updated, allows real-time config changes
 
 #### Package Structure
 

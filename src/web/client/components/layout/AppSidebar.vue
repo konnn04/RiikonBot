@@ -1,7 +1,10 @@
 <template>
   <nav id="sidebar" class="sidebar bg-dark">
     <div class="sidebar-header">
-      <h3 class="text-light py-3 px-3">{{ title }}</h3>
+      <div class="d-flex justify-content-between align-items-center text-light py-3 px-3">
+        <h3>{{ title }}</h3>
+        <theme-switcher />
+      </div>
     </div>
 
     <ul class="list-unstyled components">
@@ -15,8 +18,13 @@
 </template>
 
 <script>
+import ThemeSwitcher from '../ThemeSwitcher.vue';
+
 export default {
   name: 'AppSidebar',
+  components: {
+    ThemeSwitcher
+  },
   props: {
     title: {
       type: String,

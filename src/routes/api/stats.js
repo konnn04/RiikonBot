@@ -40,8 +40,11 @@ router.get('/stats', isAuthenticated, async (req, res) => {
         total: packages.length,
         enabled: enabledPackages
       },
+      packagesStatus: `${enabledPackages} / ${packages.length}`,
       commands: commandCount,
-      uptime: uptimeFormatted
+      uptime: uptimeFormatted,
+      startedTimestamp: client.readyTimestamp,
+      startedAt: new Date(client.readyTimestamp).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }),
     });
   } catch (error) {
     logger.error('Error fetching stats:', error);

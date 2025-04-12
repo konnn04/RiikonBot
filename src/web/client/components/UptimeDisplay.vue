@@ -32,22 +32,41 @@
 export default {
   name: 'UptimeDisplay',
   props: {
-    days: {
+    startTime: {
       type: Number,
-      default: 0
-    },
-    hours: {
-      type: Number,
-      default: 0
-    },
-    minutes: {
-      type: Number,
-      default: 0
-    },
-    seconds: {
-      type: Number,
-      default: 0
+      default: () => Date.now()
     }
+  },
+  data() {
+    return {
+      currentTime: Date.now(),
+      timerInterval: null
+    };
+  },
+  computed: {
+    elapsedTime() {
+      return this.currentTime - this.startTime;
+    },
+    days() {
+      return Math.floor(this.elapsedTime / (1000 * 60 * 60 * 24));
+    },
+    hours() {
+      return Math.floor((this.elapsedTime % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    },
+    minutes() {
+      return Math.floor((this.elapsedTime % (1000 * 60 * 60)) / (1000 * 60));
+    },
+    seconds() {
+      return Math.floor((this.elapsedTime % (1000 * 60)) / 1000);
+    }
+  },
+  mounted() {
+    this.timerInterval = setInterval(() => {
+      this.currentTime = Date.now();
+    }, 1000);
+  },
+  beforeDestroy() {
+    clearInterval(this.timerInterval);
   }
 };
 </script>
@@ -104,3 +123,4 @@ export default {
   }
 }
 </style>
+

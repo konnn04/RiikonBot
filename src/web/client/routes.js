@@ -7,6 +7,7 @@ import PackageListView from './views/PackageListView.vue';
 import PackageDetailView from './views/PackageDetailView.vue';
 import LoginView from './views/LoginView.vue';
 import ErrorView from './views/ErrorView.vue';
+import StatsVisualizationView from './views/StatsVisualizationView.vue';
 
 const routes = [
   {
@@ -58,6 +59,11 @@ const routes = [
       title: 'Page Not Found',
       message: 'The page you are looking for does not exist.'
     }
+  },
+  {
+    path: '/stats',
+    name: 'StatsVisualization',
+    component: StatsVisualizationView
   }
 ];
 

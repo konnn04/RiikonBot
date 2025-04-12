@@ -6,10 +6,11 @@
   "type": "module",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "vite build && nodemon src/index.js",
+    "dev": "nodemon src/index.js && vite build",
     "update": "node src/bot/utils/deploy-commands.js",
     "build": "vite build",
-    "dev:web": "vite"
+    "dev:server": "nodemon src/index.js",
+    "dev:client": "vite --config vite.config.js"
   },
   "repository": {
     "type": "git",
