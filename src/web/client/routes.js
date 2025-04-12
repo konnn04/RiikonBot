@@ -67,34 +67,34 @@ const router = createRouter({
   routes
 });
 
-// // Add navigation guard for authentication
-// router.beforeEach((to, from, next) => {
-//   // Skip auth check for login and error pages
-//   if (to.path === '/login' || to.path === '/error' || to.path.startsWith('/:pathMatch')) {
-//     return next();
-//   } 
+// Add navigation guard for authentication
+router.beforeEach((to, from, next) => {
+  // Skip auth check for login and error pages
+  if (to.path === '/login' || to.path === '/error' || to.path.startsWith('/:pathMatch')) {
+    return next();
+  } 
   
-//   // Check if we're in localhost environment (bypass auth)
-//   const isLocalhost = window.location.hostname === 'localhost' || 
-//                      window.location.hostname === '127.0.0.1';
-//   if (isLocalhost) {
-//     return next();
-//   }
+  // Check if we're in localhost environment (bypass auth)
+  const isLocalhost = window.location.hostname === 'localhost' || 
+                     window.location.hostname === '127.0.0.1';
+  if (isLocalhost) {
+    return next();
+  }
   
-//   // Check authentication status for non-localhost
-//   fetch('/api/auth/status')
-//     .then(response => response.json())
-//     .then(data => {
-//       if (data.authenticated) {
-//         next();
-//       } else {
-//         next('/login');
-//       }
-//     })
-//     .catch(error => {
-//       console.error('Auth check failed:', error);
-//       next('/error');
-//     });
-// });
+  // Check authentication status for non-localhost
+  fetch('/api/auth/status')
+    .then(response => response.json())
+    .then(data => {
+      if (data.authenticated) {
+        next();
+      } else {
+        next('/login');
+      }
+    })
+    .catch(error => {
+      console.error('Auth check failed:', error);
+      next('/error');
+    });
+});
 
 export default router;
