@@ -1,3 +1,5 @@
+import { TYPE, Embed } from '../utils/embed.js';
+
 export const config = {
   name: 'play',
   aliases: ['p'],
@@ -6,32 +8,24 @@ export const config = {
   category: 'music'
 };
 
-export async function execute(context) {
+export async function execute(message, args, client, musicPlayer) {
+  const member = message.member;
+  const guild = message.guild;
+  const channel = message.channel;
   // Destructure the context object to get the necessary parameters
-  const { message, member, guild, channel, reply, args, client, musicPlayer } = context;
-  
-  // Early check if musicPlayer is available
-  let resolvedMusicPlayer = musicPlayer;
-  if (!resolvedMusicPlayer) {
-    // Try to get music player from package manager if available
-    if (client && client.packageManager && typeof client.packageManager.getMusicPlayer === 'function') {
-      resolvedMusicPlayer = client.packageManager.getMusicPlayer();
-      console.log('Retrieved music player from package manager');
-    } else if (client && client.musicPlayer) {
-      resolvedMusicPlayer = client.musicPlayer;
-      console.log('Retrieved music player from client');
-    }
-    
-    // If still not available, inform the user
-    if (!resolvedMusicPlayer) {
-      return reply('❌ Music player is not available yet. Please try again in a few moments.');
-    }
+  if (!musicPlayer) {
+    return message.reply({
+      embeds: [Embed.notify('Error', 'Music player is not available.', TYPE.ERROR)]
+    })
+    ;
   }
 
   // Check if user is in a voice channel
-  const voiceChannel = member.voice.channel;
+  const voiceChannel = member?.voice?.channel;
   if (!voiceChannel) {
-    return reply('❌ You need to be in a voice channel to play music!');
+    return message.reply({
+      embeds: [Embed.notify('Error', 'You need to be in a voice channel to play music!', TYPE.ERROR)]
+    });
   }
   
   // Check bot permissions with robust null checking
@@ -51,44 +45,32 @@ export async function execute(context) {
   }
   
   if (!hasPermission) {
-    return reply('❌ I need permission to join and speak in your voice channel!');
+    return message.reply({
+      embeds: [Embed.notify('Error', 'I need permission to connect and speak in your voice channel!', TYPE.ERROR)]
+    });
   }
   
   // Check if we have a search query
-  if (!args || !args.length) {
-    return reply('❌ Please provide a song URL or search query!');
+  if (args.length === 0) {
+    return message.reply({
+      embeds: [Embed.notify('Error', 'Please provide a URL or search query!', TYPE.ERROR)]
+    });
   }
   
   const query = args.join(' ');
   
   try {
     // Send searching message
-    const searchingMsg = await channel.send(`🔍 Searching for: **${query}**`);
+    const searchingMsg = await channel.send({
+      embeds: [Embed.notify('Searching', `Searching for **${query}**...`, TYPE.INFO)]
+    });
     
     // VERIFY MUSIC PLAYER - Extra defensive checks
-    if (!resolvedMusicPlayer) {
-      return searchingMsg.edit('❌ Music player is not available. Please try again later.');
+    if (!musicPlayer) {
+      return searchingMsg.edit({
+        embeds: [Embed.notify('Error', 'Music player is not available.', TYPE.ERROR)]
+      });
     }
-    
-    // Verify required properties and methods on the musicPlayer object
-    // Separate verification for properties and methods
-    const requiredProperties = ['connections', 'queues', 'players'];
-    const requiredMethods = ['searchSongs', 'joinChannel', 'addToQueue', 'getQueue'];
-    
-    // Check properties
-    for (const prop of requiredProperties) {
-      if (!(prop in resolvedMusicPlayer)) {
-        return searchingMsg.edit(`❌ Music player is missing required property: ${prop}. Please try again later.`);
-      }
-    }
-    
-    // Check methods
-    for (const method of requiredMethods) {
-      if (typeof resolvedMusicPlayer[method] !== 'function') {
-        return searchingMsg.edit(`❌ Music player is missing required method: ${method}. Please try again later.`);
-      }
-    }
-    
     // Create default song in case search fails
     const defaultSong = {
       title: 'Unknown Song',
@@ -101,22 +83,28 @@ export async function execute(context) {
     // Search with maximum error protection
     let songs = [];
     try {
-      const searchResults = await resolvedMusicPlayer.searchSongs(query, 1);
+      const searchResults = await musicPlayer.searchSongs(query, 1);
       
       // Validate results thoroughly
       if (searchResults && Array.isArray(searchResults) && searchResults.length > 0) {
         songs = searchResults;
       } else {
-        return searchingMsg.edit('❌ No results found for your query. The YouTube search service might be experiencing issues.');
+        return searchingMsg.edit({
+          embeds: [Embed.notify('Error', 'No valid search results found. Please try a different query.', TYPE.ERROR)]
+        });
       }
     } catch (searchError) {
       console.error('Error searching for songs:', searchError);
-      return searchingMsg.edit(`❌ Error searching: ${searchError.message || 'YouTube search failed'}`);
+      return searchingMsg.edit(
+        Embed.notify('Error', `❌ Error searching for songs: ${searchError.message}`, TYPE.ERROR)
+      );
     }
     
     // Double check we have valid results
     if (songs.length === 0) {
-      return searchingMsg.edit('❌ No valid search results found. Please try a different query or try again later.');
+      return searchingMsg.edit({
+        embeds: [Embed.notify('Error', 'No songs found for your query.', TYPE.ERROR)]
+      });
     }
     
     // Get the first song and ensure it has required properties
@@ -127,35 +115,43 @@ export async function execute(context) {
     // Try to join voice channel
     let joinSuccess = false;
     try {
-      if (!resolvedMusicPlayer.connections.has(guild.id)) {
-        joinSuccess = await resolvedMusicPlayer.joinChannel(voiceChannel, channel);
+      if (!musicPlayer.connections.has(guild.id)) {
+        joinSuccess = await musicPlayer.joinChannel(voiceChannel, channel);
         if (!joinSuccess) {
-          return searchingMsg.edit('❌ Failed to join voice channel!');
+          return searchingMsg.edit({
+            embeds: [Embed.notify('Error', 'Could not join the voice channel.', TYPE.ERROR)]
+          });
         }
       } else {
         joinSuccess = true;
       }
     } catch (joinError) {
       console.error('Error joining channel:', joinError);
-      return searchingMsg.edit(`❌ Error joining voice channel: ${joinError.message}`);
+      return searchingMsg.edit({
+        embeds: [Embed.notify('Error', `❌ Error joining channel: ${joinError.message}`, TYPE.ERROR)]
+      });
     }
     
     if (!joinSuccess) {
-      return searchingMsg.edit('❌ Couldn\'t connect to voice channel for an unknown reason.');
+      return searchingMsg.edit({
+        embeds: [Embed.notify('Error', 'Failed to join the voice channel.', TYPE.ERROR)]
+      });
     }
     
     // Add to queue with error handling
     try {
-      resolvedMusicPlayer.addToQueue(guild.id, song);
+      musicPlayer.addToQueue(message.guild.id, song, member?.displayName);
     } catch (queueError) {
       console.error('Error adding to queue:', queueError);
-      return searchingMsg.edit(`❌ Error adding song to queue: ${queueError.message}`);
+      return searchingMsg.edit({
+        embeds: [Embed.notify('Error', `❌ Error adding to queue: ${queueError.message}`, TYPE.ERROR)]
+      });
     }
     
     // Get queue length safely
     let queueLength = 0;
     try {
-      const queue = resolvedMusicPlayer.getQueue(guild.id);
+      const queue = musicPlayer.getQueue(message.guild.id);
       if (queue && Array.isArray(queue.songs)) {
         queueLength = queue.songs.length;
       }
@@ -166,12 +162,16 @@ export async function execute(context) {
     
     // Show success message
     if (queueLength > 1) {
-      return searchingMsg.edit(`✅ Added to queue: **${song.title}** (${song.duration})`);
+      return searchingMsg.edit({
+        embeds: [Embed.notify('Added to Queue', `🎵 Added **#${queueLength}** **${song.title}** (${song.duration}) to the queue!`, TYPE.INFO)]
+      });
     } else {
-      return searchingMsg.edit(`🎵 Now playing: **${song.title}** (${song.duration})`);
+      searchingMsg.delete();
     }
   } catch (error) {
     console.error('Error playing song:', error);
-    return reply(`❌ Error: ${error.message || 'Unknown error'}`);
+    return message.edit({
+      embeds: [Embed.notify('Error', `❌ Error playing song: ${error.message}`, TYPE.ERROR)]
+    });
   }
 }

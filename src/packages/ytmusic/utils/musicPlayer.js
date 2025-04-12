@@ -1,23 +1,48 @@
 import { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus, VoiceConnectionStatus } from '@discordjs/voice';
 import { Collection } from 'discord.js';
 import ytdlpManager from './yt-dlp.js';
-import { getYouTubeAPI } from './youtubei.js';
+import {getYouTubeAPI } from './youtubei.js';
 import logger from '../../../utils/logger.js';
+import { Embed, TYPE } from './embed.js';
 
 /**
- * Manages music playback across multiple Discord servers
+ * @typedef {Object} Queue
+ * @property {Array} songs - Array of song objects
+ * @property {boolean} playing - Indicates if a song is currently playing
+ * @property {boolean} loop - Indicates if the queue is in loop mode
+ * @property {TextChannel} textChannel - Text channel for sending messages
+ * @property {number} volume - Volume level (0-100)
+ */
+
+/**
+ * @typedef {Object} Song
+ * @property {string} idVideo - YouTube video ID
+ * @property {string} title - Title of the song
+ * @property {string} url - URL of the song
+ * @property {string} duration - Duration of the song in MM:SS format
+ * @property {string} thumbnail - Thumbnail URL of the song
+ * @property {string} author - Author of the song
+ */
+
+/**
+ * @class MusicPlayer
+ * @description Manages music playback in Discord voice channels using yt-dlp and YouTube API
+ * @property {Collection} queues - Stores song queues for each guild
+ * @property {Collection} players - Stores audio players for each guild
+ * @property {Collection} connections - Stores voice connections for each guild
  */
 export class MusicPlayer {
   constructor(client) {
     this.client = client;
-    this.queues = new Collection(); // Server queue map
-    this.players = new Collection(); // Server audio player map
-    this.connections = new Collection(); // Voice connections
-    this.youtubeAPI = null;
+    this.queues = new Collection(); // Store song queues for each guild
+    this.players = new Collection(); // Store audio players for each guild
+    this.connections = new Collection(); // Store voice connections for each guild
+    this.youtubeAPI = null; // YouTube API instance
   } 
 
   /**
    * Initialize resources needed for music playback
+   * @returns {Promise<void>}
    */
   async initialize() {
     try {
@@ -33,16 +58,16 @@ export class MusicPlayer {
   /**
    * Get the queue for a guild, or create one if it doesn't exist
    * @param {string} guildId - Discord guild ID
-   * @returns {Object} Queue for the guild
+   * @returns {Queue} Queue for the guild
    */
   getQueue(guildId) {
     if (!this.queues.has(guildId)) {
       this.queues.set(guildId, {
         songs: [],
-        volume: 80,
         playing: false,
         loop: false,
         textChannel: null,
+        volume: 100,
       });
     }
     return this.queues.get(guildId);
@@ -50,14 +75,13 @@ export class MusicPlayer {
 
   /**
    * Join a voice channel and setup audio player
-   * @param {VoiceChannel} voiceChannel - Discord voice channel to join
-   * @param {TextChannel} textChannel - Text channel for status messages
+   * @param {VoiceChannel} voiceChannel - Discord voice channel to join (VoiceChannel)
+   * @param {TextChannel} textChannel - Text channel for status messages (TextChannel)
    * @returns {boolean} Success status
    */
   async joinChannel(voiceChannel, textChannel) {
     try {
       const guildId = voiceChannel.guild.id;
-      
       // Update queue with text channel
       const queue = this.getQueue(guildId);
       queue.textChannel = textChannel;
@@ -98,7 +122,9 @@ export class MusicPlayer {
       
       player.on('error', error => {
         logger.error(`Audio player error in guild ${guildId}:`, error);
-        textChannel.send('❌ Error playing track: ' + error.message).catch(() => {});
+        textChannel.send({
+          embeds: [Embed.notify('Error', `Audio player error: ${error.message}`, TYPE.ERROR)],
+        });
         this.playNext(guildId);
       });
       
@@ -113,24 +139,26 @@ export class MusicPlayer {
   /**
    * Add a song to the queue
    * @param {string} guildId - Discord guild ID
-   * @param {Object} song - Song object with title, url, duration, etc.
+   * @param {Song} song - Song object with title, url, duration, etc.
    */
-  addToQueue(guildId, song) {
+  addToQueue(guildId, song, orderBy = null) {
+    // Ensure the queue exists
     const queue = this.getQueue(guildId);
+    song.orderBy = orderBy || 'Unknown';
     queue.songs.push(song);
     
     // If not playing, start playback
     if (!queue.playing && queue.songs.length === 1) {
-      this.playSong(guildId, song);
+      this.playSong(guildId, song, orderBy);
     }
   }
 
   /**
    * Play a song using yt-dlp
    * @param {string} guildId - Discord guild ID
-   * @param {Object} song - Song to play
+   * @param {Song} song - Song to play
    */
-  async playSong(guildId, song) {
+  async playSong(guildId, song, orderBy = null) {
     try {
       const queue = this.getQueue(guildId);
       const player = this.players.get(guildId);
@@ -160,7 +188,17 @@ export class MusicPlayer {
       
       // Send now playing message
       if (queue.textChannel) {
-        queue.textChannel.send(`🎵 Now playing: **${song.title}**`).catch(() => {});
+        queue.textChannel.send({
+          embeds: [Embed.infoMusicPlaying(
+            song.title, 
+            song.author, 
+            song.duration,
+            song.thumbnail, 
+            song.url,
+            orderBy,
+            queue?.songs?.length >= 1 ? `${queue.songs.length - 1}`  : '?')],
+            
+        })
       }
       
       logger.info(`Started playing "${song.title}" in guild ${guildId}`);
@@ -168,7 +206,9 @@ export class MusicPlayer {
       logger.error(`Error playing song in guild ${guildId}:`, error);
       
       if (queue.textChannel) {
-        queue.textChannel.send(`❌ Error playing track: ${error.message}`).catch(() => {});
+        queue.textChannel.send({
+          embeds: [Embed.notify('Error', `Failed to play song: ${error.message}`, TYPE.ERROR)],
+        });
       }
       
       // Try to play next song
@@ -194,13 +234,15 @@ export class MusicPlayer {
     
     // If there are more songs, play the next one
     if (queue.songs.length > 0) {
-      this.playSong(guildId, queue.songs[0]);
+      this.playSong(guildId, queue.songs[0], queue.songs[0].orderBy);
     } else {
       // No more songs, mark as not playing
       queue.playing = false;
       
       if (queue.textChannel) {
-        queue.textChannel.send('🎵 Queue ended. Add more songs to keep the party going!').catch(() => {});
+        queue.textChannel.send({
+          embeds: [Embed.notify('Queue', 'No more songs in the queue.', TYPE.INFO)],
+        });
       }
     }
   }
@@ -213,6 +255,11 @@ export class MusicPlayer {
   pausePlayback(guildId) {
     const player = this.players.get(guildId);
     if (player) {
+      const queue = this.getQueue(guildId);
+      queue.playing = false;
+      queue.textChannel.send({
+        embeds: [Embed.notify('Paused', 'Playback paused.', TYPE.INFO)],
+      });
       return player.pause();
     }
     return false;
@@ -226,6 +273,11 @@ export class MusicPlayer {
   resumePlayback(guildId) {
     const player = this.players.get(guildId);
     if (player) {
+      const queue = this.getQueue(guildId);
+      queue.playing = true;
+      queue.textChannel.send({
+        embeds: [Embed.notify('Resumed', 'Playback resumed.', TYPE.INFO)],
+      });
       return player.unpause();
     }
     return false;
@@ -239,7 +291,10 @@ export class MusicPlayer {
     const player = this.players.get(guildId);
     if (player) {
       player.stop();
-      return true;
+      const queue = this.getQueue(guildId);
+      queue.textChannel.send({
+        embeds: [Embed.notify('Skipped', 'Skipped the current song.', TYPE.INFO)],
+      });
     }
     return false;
   }
@@ -251,6 +306,11 @@ export class MusicPlayer {
   stop(guildId) {
     const player = this.players.get(guildId);
     if (player) {
+      const queue = this.getQueue(guildId);
+      queue.playing = false;
+      queue.textChannel.send({
+        embeds: [Embed.notify('Stopped', 'Playback stopped.', TYPE.INFO)],
+      });
       player.stop();
     }
     this.clearQueue(guildId);
