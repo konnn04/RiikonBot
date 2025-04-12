@@ -4,11 +4,10 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import logger from './logger.js';
-import { Package } from '../database/db.js';
-import { setupDatabase } from '../database/db.js';
+import prisma, { setupDatabase } from '../database/db.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-// Update the packages directory to remove the 'available' subdirectory
+// Sửa lại đường dẫn đến thư mục packages cho đúng với thực tế
 const PACKAGES_DIR = path.join(__dirname, '..', 'packages');
 
 // Load environment variables
@@ -25,15 +24,65 @@ async function collectCommands() {
   logger.info('Collecting slash commands from enabled packages...');
   
   // Get all enabled packages from the database
-  const enabledPackages = await Package.findAll({ where: { enabled: true } });
+  const enabledPackages = await prisma.package.findMany({ 
+    where: { enabled: true } 
+  });
   const enabledPackageNames = enabledPackages.map(pkg => pkg.name);
   
   logger.info(`Found ${enabledPackageNames.length} enabled packages: ${enabledPackageNames.join(', ')}`);
   
-  // Read all package directories
-  const packageDirs = fs.readdirSync(PACKAGES_DIR, { withFileTypes: true })
-    .filter(dirent => dirent.isDirectory() && enabledPackageNames.includes(dirent.name))
-    .map(dirent => path.join(PACKAGES_DIR, dirent.name));
+  // Kiểm tra thư mục packages có tồn tại không
+  if (!fs.existsSync(PACKAGES_DIR)) {
+    logger.error(`Cannot find packages directory at: ${PACKAGES_DIR}`);
+    return commands;
+  }
+  
+  logger.info(`Using packages directory: ${PACKAGES_DIR}`);
+  
+  // Đọc thư mục packages
+  const dirContents = fs.readdirSync(PACKAGES_DIR, { withFileTypes: true });
+  logger.debug(`Found ${dirContents.length} items in packages directory`);
+  
+  const availablePackages = dirContents
+    .filter(dirent => dirent.isDirectory())
+    .map(dirent => dirent.name);
+  
+  logger.debug(`Available package directories: ${availablePackages.join(', ')}`);
+  
+  // Kiểm tra các package được bật có tồn tại trong thư mục không
+  const missingPackages = enabledPackageNames.filter(name => !availablePackages.includes(name));
+  if (missingPackages.length > 0) {
+    logger.warn(`These enabled packages are missing from the packages directory: ${missingPackages.join(', ')}`);
+  }
+  
+  // Chuẩn hóa tên package - xử lý trường hợp youtube-music-bot vs ytmusic
+  const normalizedNames = {
+    'youtube-music-bot': 'ytmusic',
+    'ytmusic': 'ytmusic'
+  };
+  
+  const packageDirs = [];
+  for (const pkgName of enabledPackageNames) {
+    const normalizedName = normalizedNames[pkgName] || pkgName;
+    
+    // Tìm kiếm package với tên gốc hoặc tên chuẩn hóa
+    const possibleNames = [pkgName, normalizedName];
+    let found = false;
+    
+    for (const name of possibleNames) {
+      const packagePath = path.join(PACKAGES_DIR, name);
+      if (fs.existsSync(packagePath)) {
+        packageDirs.push(packagePath);
+        logger.debug(`Found package directory for ${pkgName} at ${packagePath}`);
+        found = true;
+        break;
+      }
+    }
+    
+    if (!found) {
+      logger.warn(`Could not find directory for package: ${pkgName}`);
+    }
+  }
   
   // Process each package
   for (const packageDir of packageDirs) {
@@ -41,52 +90,64 @@ async function collectCommands() {
     logger.info(`Processing package: ${packageName}`);
     
     try {
-      // Look for commands directory in the package
-      const commandsDir = path.join(packageDir, 'commands');
+      // Các vị trí có thể chứa lệnh slash
+      const possibleCommandPaths = [
+        path.join(packageDir, 'slashCommands.js'),
+        path.join(packageDir, 'commands', 'slashCommands.js'),
+        path.join(packageDir, 'commands', 'index.js')
+      ];
       
-      if (fs.existsSync(commandsDir)) {
-        // Look for a slashCommands.js file for backward compatibility
-        const slashCommandsPath = path.join(packageDir, 'slashCommands.js');
+      let slashCommandsPath = null;
+      for (const cmdPath of possibleCommandPaths) {
+        if (fs.existsSync(cmdPath)) {
+          slashCommandsPath = cmdPath;
+          logger.debug(`Found commands at ${cmdPath}`);
+          break;
+        }
+      }
+      
+      if (slashCommandsPath) {
+        // Import the slash commands file
+        logger.debug(`Importing commands from ${slashCommandsPath}`);
+        const commandModule = await import(pathToFileURL(slashCommandsPath).href);
         
-        if (fs.existsSync(slashCommandsPath)) {
-          // Import the slash commands file
-          const { getCommands } = await import(pathToFileURL(slashCommandsPath).href);
-          const packageCommands = await getCommands();
-          
-          if (Array.isArray(packageCommands) && packageCommands.length > 0) {
-            commands.push(...packageCommands);
-            logger.info(`Added ${packageCommands.length} commands from ${packageName} via slashCommands.js`);
-          }
-        } else {
-          // Process command files in the commands directory
-          const commandFiles = fs.readdirSync(commandsDir)
-            .filter(file => file.endsWith('.js') && file !== 'index.js');
-            
-          for (const file of commandFiles) {
+        // Kiểm tra các hàm có thể trả về lệnh
+        const possibleFunctions = ['getCommands', 'registerSlashCommands', 'getSlashCommands'];
+        let packageCommands = [];
+        
+        for (const funcName of possibleFunctions) {
+          if (typeof commandModule[funcName] === 'function') {
             try {
-              const commandPath = path.join(commandsDir, file);
-              const commandModule = await import(pathToFileURL(commandPath).href);
-              
-              if (commandModule.config && commandModule.config.name) {
-                commands.push({
-                  name: commandModule.config.name,
-                  description: commandModule.config.description || 'No description provided',
-                  options: commandModule.config.options || []
-                });
-                
-                logger.info(`Added command ${commandModule.config.name} from ${packageName}`);
+              const result = await commandModule[funcName]();
+              if (Array.isArray(result) && result.length > 0) {
+                packageCommands = result;
+                logger.debug(`Got ${result.length} commands from ${funcName}()`);
+                break;
               }
-            } catch (error) {
-              logger.error(`Error loading command from ${file} in ${packageName}:`, error);
+            } catch (funcError) {
+              logger.warn(`Error calling ${funcName} in ${packageName}: ${funcError.message}`);
             }
           }
         }
+        
+        if (packageCommands.length > 0) {
+          commands.push(...packageCommands);
+          logger.info(`Added ${packageCommands.length} commands from ${packageName}`);
+        } else {
+          logger.warn(`No commands returned from ${packageName}`);
+        }
       } else {
-        logger.info(`No commands directory found in ${packageName}`);
+        logger.info(`No command files found in ${packageName}`);
       }
     } catch (error) {
       logger.error(`Error processing commands from ${packageName}:`, error);
     }
+  }
+  
+  if (commands.length === 0) {
+    logger.warn('No commands were found in any package. Check package structure and command exports.');
+  } else {
+    logger.info(`Total commands collected: ${commands.length}`);
   }
   
   return commands;
@@ -96,37 +157,38 @@ async function collectCommands() {
  * Registers all commands with Discord API
  */
 async function registerCommands() {
-  const commands = await collectCommands();
-  
-  if (commands.length === 0) {
-    logger.warn('No commands found to register.');
-    return;
-  }
-  
-  logger.info(`Registering ${commands.length} slash commands with Discord...`);
-  
+  // Get application ID and token from environment
   const token = process.env.DISCORD_TOKEN;
-  const clientId = process.env.DISCORD_CLIENT_ID;
+  const applicationId = process.env.DISCORD_CLIENT_ID;
   
-  if (!token || !clientId) {
-    logger.error('Missing DISCORD_TOKEN or DISCORD_CLIENT_ID in .env file');
+  if (!token || !applicationId) {
+    logger.error('Missing DISCORD_TOKEN or DISCORD_CLIENT_ID in environment variables');
     process.exit(1);
   }
   
-  // Create REST instance
+  // Initialize the REST API
   const rest = new REST({ version: '10' }).setToken(token);
   
   try {
-    logger.info('Started refreshing application (/) commands.');
+    const commands = await collectCommands();
     
-    await rest.put(
-      Routes.applicationCommands(clientId),
-      { body: commands },
+    if (commands.length === 0) {
+      logger.warn('No commands found to register');
+      return;
+    }
+    
+    logger.info(`Registering ${commands.length} application commands...`);
+    
+    // Register the commands
+    const data = await rest.put(
+      Routes.applicationCommands(applicationId),
+      { body: commands }
     );
     
-    logger.info(`Successfully registered ${commands.length} application commands.`);
+    logger.info(`Successfully registered ${data.length} application commands`);
   } catch (error) {
-    logger.error('Error registering slash commands:', error);
+    logger.error('Error registering commands:', error);
+    throw error;
   }
 }
 

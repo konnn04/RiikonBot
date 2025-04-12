@@ -36,6 +36,59 @@ router.get('/commands', isAuthenticated, async (req, res) => {
       logger.warn('No commands collection found on Discord client');
     }
     
+    // Nếu slash commands còn thiếu hoặc rỗng, thử lấy từ packageManager
+    if ((!slashCommands || slashCommands.length === 0) && packageManager && packageManager.getAllSlashCommands) {
+      try {
+        logger.info('Trying to get slash commands from packageManager.getAllSlashCommands()');
+        const managerSlashCommands = packageManager.getAllSlashCommands();
+        
+        if (Array.isArray(managerSlashCommands) && managerSlashCommands.length > 0) {
+          slashCommands = managerSlashCommands.map(cmd => ({
+            name: cmd.name,
+            description: cmd.description || 'No description',
+            type: 'SLASH',
+            category: cmd.category || 'Uncategorized',
+            enabled: true, 
+            package: cmd.package || 'unknown'
+          }));
+          logger.info(`Retrieved ${slashCommands.length} slash commands from packageManager`);
+        }
+      } catch (slashError) {
+        logger.warn('Failed to get slash commands from package manager:', slashError);
+      }
+    }
+    
+    // Kiểm tra cụ thể lệnh ytmusic nếu vẫn thiếu
+    if (packageManager && packageManager.getSlashCommandsForPackage && packageManager.getSlashCommandsForPackage['youtube-music-bot']) {
+      try {
+        logger.info('Trying to get ytmusic slash commands specifically');
+        const ytmusicCommands = await packageManager.getSlashCommandsForPackage['youtube-music-bot']();
+        
+        if (Array.isArray(ytmusicCommands) && ytmusicCommands.length > 0) {
+          // Kiểm tra xem lệnh đã tồn tại chưa
+          const existingCommandNames = new Set(slashCommands.map(cmd => cmd.name));
+          
+          const newYtmusicCommands = ytmusicCommands
+            .filter(cmd => !existingCommandNames.has(cmd.name))
+            .map(cmd => ({
+              name: cmd.name,
+              description: cmd.description || 'No description',
+              type: 'SLASH',
+              category: 'Music',
+              enabled: true,
+              package: 'youtube-music-bot'
+            }));
+            
+          if (newYtmusicCommands.length > 0) {
+            logger.info(`Adding ${newYtmusicCommands.length} ytmusic slash commands`);
+            slashCommands = [...slashCommands, ...newYtmusicCommands];
+          }
+        }
+      } catch (ytmusicError) {
+        logger.warn('Failed to get ytmusic slash commands:', ytmusicError);
+      }
+    }
+    
     // Safely retrieve prefix commands if they exist
     if (client.prefixCommands && typeof client.prefixCommands.values === 'function') {
       prefixCommands = Array.from(client.prefixCommands.values())

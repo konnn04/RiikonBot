@@ -59,10 +59,10 @@
           <button 
             type="button" 
             class="btn" 
-            :class="typeFilter === 'TEXT' ? 'btn-primary' : 'btn-outline-primary'" 
-            @click="typeFilter = 'TEXT'"
+            :class="typeFilter === 'PREFIX' ? 'btn-primary' : 'btn-outline-primary'" 
+            @click="typeFilter = 'PREFIX'"
           >
-            Text Commands
+            PREFIX Commands
           </button>
         </div>
       </div>
@@ -147,10 +147,10 @@
             <div class="col-md-6">
               <div class="card h-100">
                 <div class="card-header bg-secondary text-white">
-                  <h6 class="mb-0">Text Commands</h6>
+                  <h6 class="mb-0">PREFIX Commands</h6>
                 </div>
                 <div class="card-body">
-                  <p>Text commands use the server's prefix followed by the command name.</p>
+                  <p>PREFIX commands use the server's prefix followed by the command name.</p>
                   <div class="example-command p-2 rounded mb-2">
                     <code>!help</code> - Shows help information
                   </div>
