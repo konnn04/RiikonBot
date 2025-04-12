@@ -1,93 +1,129 @@
-import { Sequelize } from 'sequelize';
+import { PrismaClient } from '@prisma/client';
+import logger from '../utils/logger.js';
 import fs from 'fs';
 import path from 'path';
-import logger from '../utils/logger.js';
+import { fileURLToPath } from 'url';
+import { execSync } from 'child_process';
 
-const dbPath = process.env.DB_PATH || './data/database.sqlite';
+// Get directory path
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const DB_DIR = path.resolve(__dirname, '../../data');
+const PRISMA_SCHEMA_PATH = path.resolve(__dirname, '../../prisma/schema.prisma');
 
-// Ensure the directory exists
-const dir = path.dirname(dbPath);
-if (!fs.existsSync(dir)) {
-  fs.mkdirSync(dir, { recursive: true });
-}
-
-// Initialize Sequelize with SQLite
-const sequelize = new Sequelize({
-  dialect: 'sqlite',
-  storage: dbPath,
-  logging: msg => logger.debug(msg),
+// Initialize Prisma client
+const prisma = new PrismaClient({
+  log: [
+    { level: 'warn', emit: 'event' },
+    { level: 'error', emit: 'event' }
+  ]
 });
 
-// Define models
-export const Package = sequelize.define('Package', {
-  name: {
-    type: Sequelize.STRING,
-    allowNull: false,
-    unique: true
-  },
-  enabled: {
-    type: Sequelize.BOOLEAN,
-    defaultValue: true
-  },
-  version: {
-    type: Sequelize.STRING
-  },
-  config: {
-    type: Sequelize.JSON,
-    defaultValue: {}
-  }
+// Set up logging
+prisma.$on('warn', (e) => {
+  logger.warn(`Prisma warning: ${e.message}`);
 });
 
-export const User = sequelize.define('User', {
-  discordId: {
-    type: Sequelize.STRING,
-    allowNull: false,
-    unique: true
-  },
-  username: {
-    type: Sequelize.STRING
-  },
-  avatar: {
-    type: Sequelize.STRING
-  },
-  isAdmin: {
-    type: Sequelize.BOOLEAN,
-    defaultValue: false
-  }
+prisma.$on('error', (e) => {
+  logger.error(`Prisma error: ${e.message}`);
 });
 
-export const Permission = sequelize.define('Permission', {
-  name: {
-    type: Sequelize.STRING,
-    allowNull: false
-  },
-  value: {
-    type: Sequelize.BOOLEAN,
-    defaultValue: false
-  }
-});
-
-// Define relationships
-User.hasMany(Permission);
-Permission.belongsTo(User);
-Package.hasMany(Permission);
-Permission.belongsTo(Package);
-
+// Setup database function
 export async function setupDatabase() {
   try {
+    // Ensure database directory exists
+    if (!fs.existsSync(DB_DIR)) {
+      logger.info(`Creating database directory: ${DB_DIR}`);
+      fs.mkdirSync(DB_DIR, { recursive: true });
+    }
+    
+    // Check if schema.prisma file exists
+    if (!fs.existsSync(PRISMA_SCHEMA_PATH)) {
+      logger.error('Prisma schema file not found. Please create one at prisma/schema.prisma');
+      throw new Error('Missing Prisma schema file');
+    }
+    
+    // If database doesn't exist yet, initialize it with prisma
+    const dbFilePath = path.join(DB_DIR, 'database.db');
+    if (!fs.existsSync(dbFilePath)) {
+      logger.info('Database file not found, running prisma migration deploy');
+      try {
+        execSync('npx prisma migrate dev --name init', { stdio: 'inherit' });
+      } catch (error) {
+        logger.warn('Could not run migrations, attempting to generate client only');
+        execSync('npx prisma generate', { stdio: 'inherit' });
+      }
+    }
+    
     // Test connection
-    await sequelize.authenticate();
+    await prisma.$connect();
     logger.info('Database connection established successfully');
-    
-    // Sync models with database
-    await sequelize.sync();
-    logger.info('Database models synchronized');
-    
-    return sequelize;
+    return prisma;
   } catch (error) {
     logger.error('Unable to connect to the database:', error);
     throw error;
   }
 }
 
-export default sequelize;
+// Helper functions for database access
+
+// Package operations
+export async function getPackages() {
+  return prisma.package.findMany();
+}
+
+export async function getPackageByName(name) {
+  return prisma.package.findUnique({ where: { name } });
+}
+
+export async function createPackage(data) {
+  return prisma.package.create({ data });
+}
+
+export async function updatePackage(name, data) {
+  return prisma.package.update({
+    where: { name },
+    data
+  });
+}
+
+export async function togglePackage(name, enabled) {
+  return prisma.package.update({
+    where: { name },
+    data: { enabled }
+  });
+}
+
+// User operations
+export async function getUserByDiscordId(discordId) {
+  return prisma.user.findUnique({ 
+    where: { discordId },
+    include: { permissions: true }
+  });
+}
+
+export async function createUser(data) {
+  return prisma.user.create({ data });
+}
+
+export async function updateUser(id, data) {
+  return prisma.user.update({
+    where: { id },
+    data
+  });
+}
+
+// Config operations
+export async function getConfig(key) {
+  const entry = await prisma.config.findUnique({ where: { key } });
+  return entry ? entry.value : null;
+}
+
+export async function setConfig(key, value) {
+  return prisma.config.upsert({
+    where: { key },
+    update: { value },
+    create: { key, value }
+  });
+}
+
+export default prisma;

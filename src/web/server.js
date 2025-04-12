@@ -1,246 +1,154 @@
 import express from 'express';
-import session from 'express-session';
-import passport from 'passport';
-import { Strategy as DiscordStrategy } from 'passport-discord';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import cors from 'cors';
-import helmet from 'helmet';
-import { User } from '../database/db.js';
-import logger from '../utils/logger.js';
-import apiRoutes from './routes/api.js';
-import authRoutes from './routes/auth.js';
-import dashboardRoutes from './routes/dashboard.js';
+import fs from 'fs';
+import logger from '../utils/logger.js'
+import apiRoutes from '../routes/api.js';
+import viewRoutes from '../routes/views.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const REACT_BUILD_PATH = path.join(__dirname, '../../client/build');
 
-export async function startWeb(client, packageManager) {
+export async function startWebServer(client, packageManager) {
   const app = express();
-  const PORT = process.env.PORT || 3000;
+  const PORT = process.env.WEB_PORT || 3100;
   
-  // Security middleware
-  app.use(helmet({
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'", 'cdn.jsdelivr.net'],
-        styleSrc: ["'self'", "'unsafe-inline'", 'cdn.jsdelivr.net'],
-        imgSrc: ["'self'", 'cdn.discordapp.com', 'data:'],
-        connectSrc: ["'self'", 'discord.com']
-      },
-    }
-  }));
-  app.use(cors({ origin: process.env.CORS_ORIGIN || true, credentials: true }));
-  
-  // Body parser middleware
+  // Middleware
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
   
-  // Set up view engine - THIS IS THE CRITICAL ADDITION
-  app.set('view engine', 'ejs');
-  app.set('views', path.join(__dirname, 'views'));
-  
-  // Static files
-  app.use(express.static(path.join(__dirname, 'public')));
-  
-  // Session middleware
-  app.use(session({
-    secret: process.env.SESSION_SECRET || 'your_session_secret',
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: 1000 * 60 * 60 * 24 // 1 day
+  // Set proper MIME types for JavaScript modules
+  app.use((req, res, next) => {
+    if (req.path.endsWith('.js')) {
+      res.type('application/javascript');
     }
-  }));
-  
-  // Setup passport
-  app.use(passport.initialize());
-  app.use(passport.session());
-  
-  // Configure Discord strategy
-  passport.use(new DiscordStrategy({
-    clientID: process.env.DISCORD_CLIENT_ID,
-    clientSecret: process.env.DISCORD_CLIENT_SECRET,
-    callbackURL: process.env.CALLBACK_URL || `http://localhost:${PORT}/auth/discord/callback`,
-    scope: ['identify']
-  }, async (accessToken, refreshToken, profile, done) => {
-    try {
-      // Find or create user
-      const [user] = await User.findOrCreate({
-        where: { discordId: profile.id },
-        defaults: {
-          username: profile.username,
-          avatar: profile.avatar,
-          isAdmin: false
-        }
-      });
-      
-      return done(null, user);
-    } catch (error) {
-      return done(error, null);
-    }
-  }));
-  
-  passport.serializeUser((user, done) => {
-    done(null, user.id);
+    next();
   });
   
-  passport.deserializeUser(async (id, done) => {
-    try {
-      const user = await User.findByPk(id);
-      done(null, user);
-    } catch (error) {
-      done(error, null);
-    }
-  });
+  // Check and log available directories
+  const staticPath = path.join(__dirname, '..', 'static');
+  const staticAppPath = path.join(__dirname, '..', 'static', 'app');
+
   
-  // Authentication middleware
-  const checkAuth = (req, res, next) => {
-    // Allow direct access from localhost without login
-    const isLocalhost = req.ip === '127.0.0.1' || req.ip === '::1' || req.ip === '::ffff:127.0.0.1';
-    
-    if (isLocalhost) {
-      // For localhost, create a mock admin user if not authenticated
-      if (!req.isAuthenticated()) {
-        req.user = {
-          id: 0,
-          discordId: 'localhost',
-          username: 'LocalAdmin',
-          isAdmin: true
-        };
+  logger.info(`Checking for static files in: ${staticPath}`);
+  
+  // Ensure static directories exist
+  if (!fs.existsSync(staticPath)) {
+    logger.warn(`Static directory not found: ${staticPath}`);
+    fs.mkdirSync(staticPath, { recursive: true });
+    logger.info(`Created static directory: ${staticPath}`);
+  }
+
+
+  if (!fs.existsSync(staticAppPath)) {
+    logger.warn(`App static directory not found: ${staticAppPath}`);
+    fs.mkdirSync(staticAppPath, { recursive: true });
+    logger.info(`Created app static directory: ${staticAppPath}`);
+  }
+     
+  // Setup static file serving
+  logger.info(`Serving static files from: ${staticPath}`);
+  app.use(express.static(staticPath, {
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('.js')) {
+        // Ensure JS files are served with the correct MIME type
+        res.setHeader('Content-Type', 'application/javascript');
       }
-      return next();
     }
-    
-    // For non-localhost, require authentication
-    if (!req.isAuthenticated()) {
-      return res.redirect('/auth/login');
+  }));
+
+  // Serve static assets from /app directory but not for routes that should be handled by SPA
+  app.use('/app', (req, res, next) => {
+    // If the request is for an actual file (asset), serve it
+    if (req.path.includes('.')) {
+      express.static(staticAppPath, {
+        setHeaders: (res, filePath) => {
+          if (filePath.endsWith('.js')) {
+            res.setHeader('Content-Type', 'application/javascript');
+          }
+        }
+      })(req, res, next);
+    } else {
+      // If it's a route (not a file), pass to the SPA handler
+      next();
     }
-    
+  });
+
+  app.use('/app/*', (req, res) => {
+    // Serve the SPA index.html for all /app routes
+    const indexPath = path.join(staticAppPath, 'index.html');
+    res.sendFile(indexPath, (err) => {
+      if (err) {
+        logger.error('Error serving index.html:', err);
+        res.status(err.status).end();
+      }
+    });
+  });
+
+  // Add request logging middleware
+  app.use((req, res, next) => {
+    // Add request logging
+    logger.info(`Request: ${req.method} ${req.path}`);
     next();
-  };
+  });
   
-  // Admin middleware
-  const checkAdmin = (req, res, next) => {
-    if (!req.user.isAdmin) {
-      return res.status(403).render('error', {
-        error: 'Access denied',
-        message: 'You need admin permissions to access this page.'
-      });
-    }
-    next();
-  };
+  // Add validation for client and packageManager
+  if (!client) {
+    logger.error('Discord client is undefined when starting web server');
+  }
   
-  // Add bot client and package manager to request object
+  if (!packageManager) {
+    logger.error('Package manager is undefined when starting web server');
+  } else {
+    logger.info('Available packages: ' + 
+      (packageManager.getPackages ? 
+        JSON.stringify(Object.keys(packageManager.getPackages())) : 
+        'getPackages method not available'));
+  }
+  
+  // Store client and packageManager in app for access in routes
+  app.set('client', client); 
+  app.set('packageManager', packageManager);
+  
+  // Setup route middleware to make client and packageManager available in requests
   app.use((req, res, next) => {
     req.discordClient = client;
     req.packageManager = packageManager;
     next();
   });
   
-  // Routes
-  app.use('/auth', authRoutes);
+  // Register API routes
   app.use('/api', apiRoutes);
-  app.use('/dashboard', checkAuth, dashboardRoutes);
   
-  // Add root route handler
-  app.get('/', (req, res) => {
-    res.render('home', {
-      user: req.user
-    });
-  });
+  // Register view routes (only for specific routes, not catch-all)
+  app.use('/', viewRoutes);
   
-  // Admin routes
-  app.use('/admin', checkAuth, checkAdmin, (req, res) => {
-    res.render('admin', {
-      user: req.user,
-      packages: packageManager.getAllPackages()
-    });
-  });
   
-  // Register package web routes
-  const webRoutes = packageManager.getWebRoutes();
-  webRoutes.forEach((routeInfo, packageName) => {
-    const pkg = packageManager.packages.get(packageName);
-    if (pkg && pkg.enabled) {
-      // For API routes
-      const apiBasePath = `/api/packages/${packageName}`;
-      app.use(apiBasePath, checkAuth, routeInfo.handler);
-      logger.info(`Registered API route for package ${packageName} at ${apiBasePath}`);
-      
-      // For package-specific web routes
-      if (routeInfo.views) {
-        const webBasePath = `/packages/${packageName}`;
-        // Create a new router for the package's web routes
-        const packageRouter = express.Router();
-        
-        // Add middleware to use package-specific views
-        packageRouter.use((req, res, next) => {
-          const originalRender = res.render;
-          res.render = function(view, options, callback) {
-            const opts = { ...options };
-            // Set package-specific views folder
-            const originalViewPath = app.get('views');
-            app.set('views', routeInfo.views);
-            
-            originalRender.call(this, view, opts, (err, html) => {
-              // Restore original views path
-              app.set('views', originalViewPath);
-              
-              if (err) {
-                logger.error(`Error rendering package view ${view}:`, err);
-                // Try fallback to default views
-                originalRender.call(this, view, opts, callback);
-              } else if (callback) {
-                callback(null, html);
-              } else {
-                this.send(html);
-              }
-            });
-          };
-          next();
-        });
-        
-        // Use the package's routes with the package router
-        packageRouter.use(routeInfo.handler);
-        
-        // Mount the package router
-        app.use(webBasePath, checkAuth, packageRouter);
-        logger.info(`Registered web route for package ${packageName} at ${webBasePath}`);
-      }
+  // Handle 404 errors
+  app.use((req, res) => {
+    // If API request, return JSON
+    if (req.path.startsWith('/api')) {
+      return res.status(404).json({ error: 'Route not found' });
     }
+    return res.status(404).send(`
+      <h1>Route not found</h1>
+      <p>The requested route ${req.path} does not exist.</p>
+      <p>If you're trying to access the dashboard, make sure you've built it with "npm run build".</p>
+    `);
   });
-
-  // Serve React static files in production
-  if (process.env.NODE_ENV === 'production') {
-    app.use(express.static(REACT_BUILD_PATH));
-    
-    // All other GET requests not handled before will return the React app
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(REACT_BUILD_PATH, 'index.html'));
-    });
-  }
   
-  // Error handling
+  // Error handler
   app.use((err, req, res, next) => {
-    logger.error('Server error:', err);
-    res.status(500).json({
-      error: 'Server Error',
-      message: process.env.NODE_ENV === 'production' ? 'Something went wrong' : err.message
-    });
+    logger.error('Web server error:', err);
+    if (req.path.startsWith('/api')) {
+      return res.status(500).json({ error: 'Internal server error' });
+    }
+    res.status(500).send('Internal Server Error');
   });
   
   // Start server
-  return new Promise((resolve, reject) => {
-    try {
-      const server = app.listen(PORT, () => {
-        logger.info(`Web server running on port ${PORT}`);
-        resolve(server);
-      });
-    } catch (error) {
-      reject(error);
-    }
+  app.listen(PORT, () => {
+    logger.info(`WEB: http://localhost:${PORT}`);
   });
+  
+  return app;
 }

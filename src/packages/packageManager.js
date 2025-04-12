@@ -1,13 +1,14 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
-import { Package } from '../database/db.js';
+import * as db from '../database/db.js';
 import logger from '../utils/logger.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PACKAGES_DIR = path.join(__dirname, 'available');
+// Update the packages directory to remove the 'available' subdirectory
+const PACKAGES_DIR = __dirname;
 // Define packages to be excluded because their functionality is included in standard package
-const EXCLUDED_PACKAGES = ['help', 'ping-pong'];
+const EXCLUDED_PACKAGES = ['help', 'ping-pong', 'packageManager.js', 'index.js'];
 
 class PackageManager {
   constructor() {
@@ -80,14 +81,18 @@ class PackageManager {
       }
       
       // Check if package exists in database, create if not
-      let [pkgEntity] = await Package.findOrCreate({
-        where: { name: packageName },
-        defaults: {
+      let pkgEntity = await db.getPackageByName(packageName);
+      
+      if (!pkgEntity) {
+        pkgEntity = await db.createPackage({
+          name: packageName,
           version: packageJson.version,
           enabled: true,
-          config: packageJson.config || {}
-        }
-      });
+          config: typeof packageJson.config === 'string' ? 
+            packageJson.config : 
+            JSON.stringify(packageJson.config || {})
+        });
+      }
       
       // Import the package's main file - Convert Windows path to file:// URL
       const mainFilePath = path.join(packageDir, packageJson.main || 'index.js');
@@ -98,7 +103,9 @@ class PackageManager {
         name: packageName,
         version: packageJson.version,
         enabled: pkgEntity.enabled,
-        config: pkgEntity.config,
+        config: typeof pkgEntity.config === 'string' ? 
+          JSON.parse(pkgEntity.config) : 
+          pkgEntity.config,
         module: packageModule,
         manifest: packageJson,
         isDefault: packageJson.isDefault || false
@@ -153,7 +160,7 @@ class PackageManager {
     
     try {
       // Update database
-      await Package.update({ enabled }, { where: { name: packageName } });
+      await db.togglePackage(packageName, enabled);
       
       // Update local cache
       pkg.enabled = enabled;

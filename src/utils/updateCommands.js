@@ -8,7 +8,8 @@ import { Package } from '../database/db.js';
 import { setupDatabase } from '../database/db.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PACKAGES_DIR = path.join(__dirname, '..', 'packages', 'available');
+// Update the packages directory to remove the 'available' subdirectory
+const PACKAGES_DIR = path.join(__dirname, '..', 'packages');
 
 // Load environment variables
 dotenv.config();

@@ -1,6 +1,6 @@
 import dotenv from 'dotenv';
 import { startBot } from './bot/bot.js';
-import { startWeb } from './web/server.js';
+import { startWebServer } from './web/server.js';
 import { setupDatabase } from './database/db.js';
 import { loadPackages } from './packages/packageManager.js';
 import logger from './utils/logger.js';
@@ -26,7 +26,7 @@ async function initialize() {
     
     // 4. Start web server
     logger.info("Starting web server...");
-    await startWeb(client, packageManager);
+    await startWebServer(client, packageManager);
     
     logger.info('RiikonBot successfully initialized');
   } catch (error) {
