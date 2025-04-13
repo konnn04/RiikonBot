@@ -1,0 +1,31 @@
+import logger from '../../../utils/logger.js'
+import { EmbedBuilder } from 'discord.js'
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath, pathToFileURL } from 'url';
+
+//Command configuration
+export const config = {
+    name: 'avatar',
+    description: 'Show avatar of a user',
+    category: 'Social',
+    options: [
+        {
+            type: 'user',
+            name: 'user',
+            description: 'Username that you want to get avatar',
+            required: true
+        }
+    ]
+}
+
+//Command execution
+export async function execute(interaction, cilent) {
+    const targetUser = interaction.options.getUser('user')
+    const url = `https://cdn.discordapp.com/avatars/${targetUser.id}/${targetUser.avatar}.png?size=1024`
+    const embed = new EmbedBuilder()
+        .setTitle("Here is avatar of " + targetUser.username)
+        .setImage(url)
+        .setDescription(`[Image URL](${url})`)
+    await interaction.reply({embeds: [embed]})
+}
