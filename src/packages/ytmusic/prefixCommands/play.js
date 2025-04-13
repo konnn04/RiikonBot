@@ -8,25 +8,10 @@ export const config = {
   category: 'music'
 };
 
-export async function execute(message, args, client, musicPlayer) {
+export async function execute(message, args, voiceChannel, musicPlayer) {
   const member = message.member;
   const guild = message.guild;
   const channel = message.channel;
-  // Destructure the context object to get the necessary parameters
-  if (!musicPlayer) {
-    return message.reply({
-      embeds: [Embed.notify('Error', 'Music player is not available.', TYPE.ERROR)]
-    })
-    ;
-  }
-
-  // Check if user is in a voice channel
-  const voiceChannel = member?.voice?.channel;
-  if (!voiceChannel) {
-    return message.reply({
-      embeds: [Embed.notify('Error', 'You need to be in a voice channel to play music!', TYPE.ERROR)]
-    });
-  }
   
   // Check bot permissions with robust null checking
   let hasPermission = true;

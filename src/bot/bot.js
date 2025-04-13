@@ -10,6 +10,7 @@ export async function startBot(packageManager) {
       GatewayIntentBits.MessageContent,
       GatewayIntentBits.GuildVoiceStates,
       GatewayIntentBits.GuildMembers,
+      GatewayIntentBits.GuildPresences,
     ]
   });
   

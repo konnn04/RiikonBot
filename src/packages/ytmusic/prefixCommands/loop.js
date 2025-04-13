@@ -1,17 +1,17 @@
 import { TYPE, Embed } from '../utils/embed.js';
 
 export const config = {
-  name: 'skip',
-  aliases: ['s', 'next'],
-  description: 'Skip to the next song in the queue',
-  usage: 'skip',
+  name: 'loop',
+  aliases: ['repeat', 'l'],
+  description: 'Toggle loop mode for the current queue',
+  usage: 'loop',
   category: 'music'
 };
 
 export async function execute(message, args, voiceChannel, musicPlayer) {
   const guild = message.guild;
- 
-  // Now safely access musicPlayer properties with additional checks
+  
+  // Check if music player is available
   if (!musicPlayer?.players || !musicPlayer?.players.has) {
     return message.reply({
       embeds: [Embed.notify('Error', 'Music player is not available.', TYPE.ERROR)]
@@ -36,7 +36,7 @@ export async function execute(message, args, voiceChannel, musicPlayer) {
   // Check same voice channel
   if (botVoiceChannel && botVoiceChannel.id !== voiceChannel?.id) {
     return message.reply({
-      embeds: [Embed.notify('Error', 'You need to be in the same voice channel as me to skip songs!', TYPE.ERROR)]
+      embeds: [Embed.notify('Error', 'You need to be in the same voice channel as me to toggle loop mode!', TYPE.ERROR)]
     });
   }
   
@@ -52,27 +52,27 @@ export async function execute(message, args, voiceChannel, musicPlayer) {
   }
   
   // Check if there are songs in the queue
-  if (!queue || !queue.songs || queue.songs.length <= 1) {
+  if (!queue || !queue.songs || queue.songs.length === 0) {
     return message.reply({
-      embeds: [Embed.notify('Error', 'There are no songs to skip!', TYPE.ERROR)]
+      embeds: [Embed.notify('Error', 'There are no songs in the queue!', TYPE.ERROR)]
     });
   }
   
   try {
-    const skipped = musicPlayer.skipSong(message.guild.id);
-    if (skipped) {
-      return message.reply({
-        embeds: [Embed.notify('Success', 'Skipped the current song!', TYPE.SUCCESS)]
-      });
-    } else {
-      return message.reply({
-        embeds: [Embed.notify('Error', 'Failed to skip the song.', TYPE.ERROR)]
-      });
-    }
-  } catch (error) {
-    console.error('Error skipping song:', error);
+    // Toggle loop mode
+    const isLoopEnabled = musicPlayer.toggleLoop(guild.id);
+    
     return message.reply({
-      embeds: [Embed.notify('Error', 'An error occurred while trying to skip the song.', TYPE.ERROR)]
+      embeds: [Embed.notify(
+        'Loop Mode', 
+        isLoopEnabled ? '🔁 Loop mode is now **enabled**' : '➡️ Loop mode is now **disabled**', 
+        isLoopEnabled ? TYPE.SUCCESS : TYPE.INFO
+      )]
+    });
+  } catch (error) {
+    console.error('Error toggling loop mode:', error);
+    return message.reply({
+      embeds: [Embed.notify('Error', 'An error occurred while trying to toggle loop mode.', TYPE.ERROR)]
     });
   }
 }

@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { EmbedBuilder } from 'discord.js';
+import { TYPE, Embed } from '../utils/embed.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -28,23 +29,29 @@ export async function processMessage(message, client, prefix, musicPlayer) {
       logger.debug(`Found musicPlayer: ${!!resolvedMusicPlayer}`);
     } else {
       logger.warn('Could not find musicPlayer through any method');
+      // If no music player is found, inform the user
+      return message.reply({
+        embeds: [Embed.notify('Error', 'Music system is unavailable. Please report this to the bot administrator.', TYPE.ERROR)]
+      });
     }
-    
-    await command.execute(message, args, client, resolvedMusicPlayer);
+
+    const voiceChannel = message.member?.voice?.channel;
+    if (!voiceChannel) {
+      return message.reply({
+        embeds: [Embed.notify('Error', 'You need to be in a voice channel to play music!', TYPE.ERROR)]
+      });
+    }
+
+    // Check if the command is a slash command and if so, handle it accordingly    
+    await command.execute(message, args, voiceChannel, resolvedMusicPlayer);
     logger.debug(`Executed music command ${commandName} for ${message.author.tag}`);
 
   } catch (error) {
     logger.error(`Error executing music command ${commandName}: ${error.message}`, error);
-    
-    // Sử dụng embed thay vì tin nhắn thông thường
-    const errorEmbed = new EmbedBuilder()
-      .setColor('#FF0000')
-      .setTitle('❌ Command Error')
-      .setDescription('There was an error executing that command!')
-      .addFields({ name: 'Error', value: error.message || 'Unknown error' })
-      .setTimestamp();
       
-    await message.reply({ embeds: [errorEmbed] }).catch(() => {});
+    await message.reply({ embeds: {
+      embeds: [Embed.notify('Error', 'An error occurred while executing the command.', TYPE.ERROR)]
+    } }).catch(() => {});
   }
 }
 /**

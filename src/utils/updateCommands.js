@@ -1,5 +1,5 @@
 import dotenv from 'dotenv';
-import { REST, Routes } from 'discord.js';
+import { REST, Routes, SlashCommandBuilder } from 'discord.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
@@ -7,7 +7,6 @@ import logger from './logger.js';
 import prisma, { setupDatabase } from '../database/db.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-// Sửa lại đường dẫn đến thư mục packages cho đúng với thực tế
 const PACKAGES_DIR = path.join(__dirname, '..', 'packages');
 
 // Load environment variables
@@ -31,7 +30,7 @@ async function collectCommands() {
   
   logger.info(`Found ${enabledPackageNames.length} enabled packages: ${enabledPackageNames.join(', ')}`);
   
-  // Kiểm tra thư mục packages có tồn tại không
+  // Check if packages directory exists
   if (!fs.existsSync(PACKAGES_DIR)) {
     logger.error(`Cannot find packages directory at: ${PACKAGES_DIR}`);
     return commands;
@@ -39,7 +38,7 @@ async function collectCommands() {
   
   logger.info(`Using packages directory: ${PACKAGES_DIR}`);
   
-  // Đọc thư mục packages
+  // Read packages directory
   const dirContents = fs.readdirSync(PACKAGES_DIR, { withFileTypes: true });
   logger.debug(`Found ${dirContents.length} items in packages directory`);
   
@@ -49,98 +48,172 @@ async function collectCommands() {
   
   logger.debug(`Available package directories: ${availablePackages.join(', ')}`);
   
-  // Kiểm tra các package được bật có tồn tại trong thư mục không
+  // Check if enabled packages exist in the directory
   const missingPackages = enabledPackageNames.filter(name => !availablePackages.includes(name));
   if (missingPackages.length > 0) {
     logger.warn(`These enabled packages are missing from the packages directory: ${missingPackages.join(', ')}`);
   }
   
-  // Chuẩn hóa tên package - xử lý trường hợp youtube-music-bot vs ytmusic
+  // Normalize package names
   const normalizedNames = {
     'youtube-music-bot': 'ytmusic',
     'ytmusic': 'ytmusic'
   };
   
-  const packageDirs = [];
+  // Process each enabled package
   for (const pkgName of enabledPackageNames) {
     const normalizedName = normalizedNames[pkgName] || pkgName;
     
-    // Tìm kiếm package với tên gốc hoặc tên chuẩn hóa
+    // Find package directory
     const possibleNames = [pkgName, normalizedName];
-    let found = false;
+    let packageDir = null;
     
     for (const name of possibleNames) {
       const packagePath = path.join(PACKAGES_DIR, name);
       if (fs.existsSync(packagePath)) {
-        packageDirs.push(packagePath);
+        packageDir = packagePath;
         logger.debug(`Found package directory for ${pkgName} at ${packagePath}`);
-        found = true;
         break;
       }
     }
     
-    if (!found) {
+    if (!packageDir) {
       logger.warn(`Could not find directory for package: ${pkgName}`);
+      continue;
     }
-  }
-  
-  // Process each package
-  for (const packageDir of packageDirs) {
-    const packageName = path.basename(packageDir);
-    logger.info(`Processing package: ${packageName}`);
+    
+    // Look for commands directory
+    const commandsDir = path.join(packageDir, 'commands');
+    if (!fs.existsSync(commandsDir) || !fs.statSync(commandsDir).isDirectory()) {
+      logger.info(`No commands directory found in package ${pkgName}`);
+      continue;
+    }
+    
+    logger.info(`Processing commands from ${pkgName}`);
     
     try {
-      // Các vị trí có thể chứa lệnh slash
-      const possibleCommandPaths = [
-        path.join(packageDir, 'slashCommands.js'),
-        path.join(packageDir, 'commands', 'slashCommands.js'),
-        path.join(packageDir, 'commands', 'index.js')
-      ];
+      // Get all JS files in the commands directory
+      const commandFiles = fs.readdirSync(commandsDir)
+        .filter(file => file.endsWith('.js') && file !== 'index.js');
       
-      let slashCommandsPath = null;
-      for (const cmdPath of possibleCommandPaths) {
-        if (fs.existsSync(cmdPath)) {
-          slashCommandsPath = cmdPath;
-          logger.debug(`Found commands at ${cmdPath}`);
-          break;
-        }
-      }
+      logger.debug(`Found ${commandFiles.length} command files in ${pkgName}`);
       
-      if (slashCommandsPath) {
-        // Import the slash commands file
-        logger.debug(`Importing commands from ${slashCommandsPath}`);
-        const commandModule = await import(pathToFileURL(slashCommandsPath).href);
-        
-        // Kiểm tra các hàm có thể trả về lệnh
-        const possibleFunctions = ['getCommands', 'registerSlashCommands', 'getSlashCommands'];
-        let packageCommands = [];
-        
-        for (const funcName of possibleFunctions) {
-          if (typeof commandModule[funcName] === 'function') {
-            try {
-              const result = await commandModule[funcName]();
-              if (Array.isArray(result) && result.length > 0) {
-                packageCommands = result;
-                logger.debug(`Got ${result.length} commands from ${funcName}()`);
-                break;
+      // Process each command file
+      for (const file of commandFiles) {
+        try {
+          const filePath = path.join(commandsDir, file);
+          const commandModule = await import(pathToFileURL(filePath).href);
+          
+          // Check if module has required config
+          if (!commandModule.config || !commandModule.execute) {
+            logger.warn(`Command file ${file} in ${pkgName} is missing config or execute function`);
+            continue;
+          }
+          
+          const { name, description, options = [] } = commandModule.config;
+          
+          if (!name || !description) {
+            logger.warn(`Command file ${file} in ${pkgName} has invalid config (missing name or description)`);
+            continue;
+          }
+          
+          // Build command using SlashCommandBuilder
+          const command = new SlashCommandBuilder()
+            .setName(name)
+            .setDescription(description);
+          
+          // Add options based on their types
+          if (options && Array.isArray(options)) {
+            for (const option of options) {
+              if (!option.name || !option.description || !option.type) {
+                logger.warn(`Option in command ${name} (${pkgName}) is missing required properties`);
+                continue;
               }
-            } catch (funcError) {
-              logger.warn(`Error calling ${funcName} in ${packageName}: ${funcError.message}`);
+              
+              const optionType = option.type.toLowerCase();
+              
+              // Handle different option types
+              switch (optionType) {
+                case 'string':
+                  command.addStringOption(opt => 
+                    opt.setName(option.name)
+                       .setDescription(option.description)
+                       .setRequired(option.required === true));
+                  break;
+                  
+                case 'integer':
+                  command.addIntegerOption(opt => 
+                    opt.setName(option.name)
+                       .setDescription(option.description)
+                       .setRequired(option.required === true));
+                  break;
+                  
+                case 'boolean':
+                  command.addBooleanOption(opt => 
+                    opt.setName(option.name)
+                       .setDescription(option.description)
+                       .setRequired(option.required === true));
+                  break;
+                  
+                case 'user':
+                  command.addUserOption(opt => 
+                    opt.setName(option.name)
+                       .setDescription(option.description)
+                       .setRequired(option.required === true));
+                  break;
+                  
+                case 'channel':
+                  command.addChannelOption(opt => 
+                    opt.setName(option.name)
+                       .setDescription(option.description)
+                       .setRequired(option.required === true));
+                  break;
+                  
+                case 'role':
+                  command.addRoleOption(opt => 
+                    opt.setName(option.name)
+                       .setDescription(option.description)
+                       .setRequired(option.required === true));
+                  break;
+                  
+                case 'mentionable':
+                  command.addMentionableOption(opt => 
+                    opt.setName(option.name)
+                       .setDescription(option.description)
+                       .setRequired(option.required === true));
+                  break;
+                  
+                case 'number':
+                  command.addNumberOption(opt => 
+                    opt.setName(option.name)
+                       .setDescription(option.description)
+                       .setRequired(option.required === true));
+                  break;
+                  
+                case 'attachment':
+                  command.addAttachmentOption(opt => 
+                    opt.setName(option.name)
+                       .setDescription(option.description)
+                       .setRequired(option.required === true));
+                  break;
+                  
+                default:
+                  logger.warn(`Unknown option type "${optionType}" in command ${name} (${pkgName})`);
+                  continue;
+              }
             }
           }
+          
+          // Add command to the list
+          commands.push(command.toJSON());
+          logger.debug(`Added command ${name} from ${pkgName}`);
+          
+        } catch (error) {
+          logger.error(`Error processing command file ${file} in ${pkgName}:`, error);
         }
-        
-        if (packageCommands.length > 0) {
-          commands.push(...packageCommands);
-          logger.info(`Added ${packageCommands.length} commands from ${packageName}`);
-        } else {
-          logger.warn(`No commands returned from ${packageName}`);
-        }
-      } else {
-        logger.info(`No command files found in ${packageName}`);
       }
     } catch (error) {
-      logger.error(`Error processing commands from ${packageName}:`, error);
+      logger.error(`Error reading commands directory for ${pkgName}:`, error);
     }
   }
   

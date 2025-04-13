@@ -1,7 +1,7 @@
 import { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus, VoiceConnectionStatus } from '@discordjs/voice';
 import { Collection } from 'discord.js';
 import ytdlpManager from './yt-dlp.js';
-import {getYouTubeAPI } from './youtubei.js';
+import { getYouTubeAPI } from './youtubei.js';
 import logger from '../../../utils/logger.js';
 import { Embed, TYPE } from './embed.js';
 
@@ -38,7 +38,7 @@ export class MusicPlayer {
     this.players = new Collection(); // Store audio players for each guild
     this.connections = new Collection(); // Store voice connections for each guild
     this.youtubeAPI = null; // YouTube API instance
-  } 
+  }
 
   /**
    * Initialize resources needed for music playback
@@ -85,7 +85,7 @@ export class MusicPlayer {
       // Update queue with text channel
       const queue = this.getQueue(guildId);
       queue.textChannel = textChannel;
-      
+
       // Create connection to voice channel
       const connection = joinVoiceChannel({
         channelId: voiceChannel.id,
@@ -93,15 +93,15 @@ export class MusicPlayer {
         adapterCreator: voiceChannel.guild.voiceAdapterCreator,
         selfDeaf: true,
       });
-      
+
       // Create audio player
       const player = createAudioPlayer();
       connection.subscribe(player);
-      
+
       // Store the connection and player
       this.connections.set(guildId, connection);
       this.players.set(guildId, player);
-      
+
       // Handle connection errors
       connection.on(VoiceConnectionStatus.Disconnected, async () => {
         try {
@@ -114,12 +114,12 @@ export class MusicPlayer {
           this.clearQueue(guildId);
         }
       });
-      
+
       // Handle player state changes
       player.on(AudioPlayerStatus.Idle, () => {
         this.playNext(guildId);
       });
-      
+
       player.on('error', error => {
         logger.error(`Audio player error in guild ${guildId}:`, error);
         textChannel.send({
@@ -127,7 +127,7 @@ export class MusicPlayer {
         });
         this.playNext(guildId);
       });
-      
+
       logger.info(`Joined voice channel in guild ${guildId}`);
       return true;
     } catch (error) {
@@ -146,7 +146,7 @@ export class MusicPlayer {
     const queue = this.getQueue(guildId);
     song.orderBy = orderBy || 'Unknown';
     queue.songs.push(song);
-    
+
     // If not playing, start playback
     if (!queue.playing && queue.songs.length === 1) {
       this.playSong(guildId, song, orderBy);
@@ -162,15 +162,15 @@ export class MusicPlayer {
     try {
       const queue = this.getQueue(guildId);
       const player = this.players.get(guildId);
-      
+
       if (!player) {
         logger.error(`No audio player found for guild ${guildId}`);
         return;
       }
-      
+
       // Get stream for the song
       const stream = await ytdlpManager.streamAudio(song.videoId);
-      
+
       // Create Discord.js audio resource
       const resource = createAudioResource(stream, {
         inlineVolume: true,
@@ -178,39 +178,39 @@ export class MusicPlayer {
           title: song.title,
         },
       });
-      
+
       // Set volume
       resource.volume.setVolume(queue.volume / 100);
-      
+
       // Play the song
       player.play(resource);
       queue.playing = true;
-      
+
       // Send now playing message
       if (queue.textChannel) {
         queue.textChannel.send({
           embeds: [Embed.infoMusicPlaying(
-            song.title, 
-            song.author, 
+            song.title,
+            song.author,
             song.duration,
-            song.thumbnail, 
+            song.thumbnail,
             song.url,
             orderBy,
-            queue?.songs?.length >= 1 ? `${queue.songs.length - 1}`  : '?')],
-            
+            queue?.songs?.length >= 1 ? `${queue.songs.length - 1}` : '?')],
+
         })
       }
-      
+
       logger.info(`Started playing "${song.title}" in guild ${guildId}`);
     } catch (error) {
       logger.error(`Error playing song in guild ${guildId}:`, error);
-      
+
       if (queue.textChannel) {
         queue.textChannel.send({
           embeds: [Embed.notify('Error', `Failed to play song: ${error.message}`, TYPE.ERROR)],
         });
       }
-      
+
       // Try to play next song
       this.playNext(guildId);
     }
@@ -222,7 +222,7 @@ export class MusicPlayer {
    */
   playNext(guildId) {
     const queue = this.getQueue(guildId);
-    
+
     if (queue.loop && queue.songs.length > 0) {
       // If loop is enabled, move current song to the end of queue
       const currentSong = queue.songs.shift();
@@ -231,14 +231,13 @@ export class MusicPlayer {
       // Remove the first song (just played)
       queue.songs.shift();
     }
-    
+
     // If there are more songs, play the next one
     if (queue.songs.length > 0) {
       this.playSong(guildId, queue.songs[0], queue.songs[0].orderBy);
     } else {
       // No more songs, mark as not playing
       queue.playing = false;
-      
       if (queue.textChannel) {
         queue.textChannel.send({
           embeds: [Embed.notify('Queue', 'No more songs in the queue.', TYPE.INFO)],
@@ -255,11 +254,11 @@ export class MusicPlayer {
   pausePlayback(guildId) {
     const player = this.players.get(guildId);
     if (player) {
-      const queue = this.getQueue(guildId);
-      queue.playing = false;
-      queue.textChannel.send({
-        embeds: [Embed.notify('Paused', 'Playback paused.', TYPE.INFO)],
-      });
+      // const queue = this.getQueue(guildId);
+      // queue.playing = false;
+      // queue.textChannel.send({
+      //   embeds: [Embed.notify('Paused', 'Playback paused.', TYPE.INFO)],
+      // });
       return player.pause();
     }
     return false;
@@ -273,11 +272,11 @@ export class MusicPlayer {
   resumePlayback(guildId) {
     const player = this.players.get(guildId);
     if (player) {
-      const queue = this.getQueue(guildId);
-      queue.playing = true;
-      queue.textChannel.send({
-        embeds: [Embed.notify('Resumed', 'Playback resumed.', TYPE.INFO)],
-      });
+      // const queue = this.getQueue(guildId);
+      // queue.playing = true;
+      // queue.textChannel.send({
+      //   embeds: [Embed.notify('Resumed', 'Playback resumed.', TYPE.INFO)],
+      // });
       return player.unpause();
     }
     return false;
@@ -291,11 +290,13 @@ export class MusicPlayer {
     const player = this.players.get(guildId);
     if (player) {
       player.stop();
-      const queue = this.getQueue(guildId);
-      queue.textChannel.send({
-        embeds: [Embed.notify('Skipped', 'Skipped the current song.', TYPE.INFO)],
-      });
+      // const queue = this.getQueue(guildId);
+      // queue.textChannel.send({
+      //   embeds: [Embed.notify('Skipped', 'Skipped the current song.', TYPE.INFO)],
+      // });
+      return true;
     }
+
     return false;
   }
 
@@ -306,14 +307,16 @@ export class MusicPlayer {
   stop(guildId) {
     const player = this.players.get(guildId);
     if (player) {
-      const queue = this.getQueue(guildId);
-      queue.playing = false;
-      queue.textChannel.send({
-        embeds: [Embed.notify('Stopped', 'Playback stopped.', TYPE.INFO)],
-      });
+      // const queue = this.getQueue(guildId);
+      // queue.playing = false;
+      // queue.textChannel.send({
+      //   embeds: [Embed.notify('Stopped', 'Playback stopped.', TYPE.INFO)],
+      // });
       player.stop();
+      return true;
     }
     this.clearQueue(guildId);
+    return false;
   }
 
   /**
@@ -345,11 +348,11 @@ export class MusicPlayer {
   setVolume(guildId, volume) {
     const queue = this.getQueue(guildId);
     const player = this.players.get(guildId);
-    
+
     if (player && player.state.resource) {
       player.state.resource.volume.setVolume(volume / 100);
     }
-    
+
     queue.volume = volume;
     return volume;
   }
@@ -364,9 +367,34 @@ export class MusicPlayer {
       connection.destroy();
       this.connections.delete(guildId);
     }
-    
+
     this.players.delete(guildId);
     this.clearQueue(guildId);
+  }
+
+  /**
+   * Get the voice channel the bot is in
+   * @param {Guild} guild - Discord guild object
+   * @returns {VoiceChannel} Voice channel object or null if not found
+   */
+  getVoiceChannel(guildId) {
+    const guild = this.client.guilds.cache.get(guildId);
+    if (!guild) {
+      logger.warn(`Guild not found for ID: ${guildId}`);
+      return null;
+    }
+    // Check if bot is in a voice channel
+    let botVoiceChannel = null;
+    const connection = this.connections.get(guildId);
+    if (connection) {
+      const channelId = connection.joinConfig.channelId;
+      botVoiceChannel = guild.channels.cache.get(channelId);
+    }
+    // Check bot is in a voice channel
+    if (!botVoiceChannel) {
+      return null;
+    }
+    return botVoiceChannel;
   }
 
   /**
@@ -381,15 +409,15 @@ export class MusicPlayer {
       if (!this.youtubeAPI) {
         logger.warn('YouTube API not initialized, trying to initialize now');
         await this.initialize();
-        
+
         if (!this.youtubeAPI) {
           throw new Error('YouTube API could not be initialized');
         }
       }
-      
+
       // Check if it looks like a YouTube URL
       const isYoutubeUrl = query.match(/^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)/i);
-      
+
       if (isYoutubeUrl) {
         // Get info for the video
         const videoId = this.extractVideoId(query);
@@ -398,7 +426,7 @@ export class MusicPlayer {
           // Fall back to regular search instead of failing
           return this.performRegularSearch(query, limit);
         }
-        
+
         try {
           const info = await this.youtubeAPI.getVideoInfo(videoId);
           return [{
@@ -435,31 +463,31 @@ export class MusicPlayer {
     if (!this.youtubeAPI) {
       throw new Error('YouTube API not available');
     }
-    
+
     try {
-      const results = await this.youtubeAPI.searchMusic(query);
-      
+      const results = await this.youtubeAPI.search(query);
+
       // Ensure results is an array
       if (!Array.isArray(results)) {
         logger.warn(`YouTube API returned non-array results: ${typeof results}`);
         return [];
       }
-      
+
       // Filter out any invalid items and format the valid ones
       const validResults = results
         .filter(item => !!item && typeof item === 'object')
         .map(item => {
           // Ensure all properties have fallback values
           const id = item.id || '';
-          const title = typeof item.title === 'string' ? item.title : 
-                         (item.title ? String(item.title) : 'Unknown Title');
-          const duration = item.duration && typeof item.duration === 'object' ? 
-                           (item.duration.seconds || 0) : 0;
-          const thumbnail = item.thumbnail && Array.isArray(item.thumbnail) && item.thumbnail[0] ? 
-                            item.thumbnail[0].url : null;
-          const author = item.author && typeof item.author === 'object' ? 
-                         (item.author.name || 'Unknown') : 'Unknown';
-          
+          const title = typeof item.title === 'string' ? item.title :
+            (item.title ? String(item.title) : 'Unknown Title');
+          const duration = item.duration && typeof item.duration === 'object' ?
+            (item.duration.seconds || 0) : 0;
+          const thumbnail = item.thumbnail && Array.isArray(item.thumbnail) && item.thumbnail[0] ?
+            item.thumbnail[0].url : null;
+          const author = item.author && typeof item.author === 'object' ?
+            (item.author.name || 'Unknown') : 'Unknown';
+
           return {
             title,
             url: `https://www.youtube.com/watch?v=${id}`,
@@ -470,7 +498,7 @@ export class MusicPlayer {
           };
         })
         .filter(item => item.videoId); // Only keep items with a valid videoId
-      
+
       return validResults.slice(0, limit);
     } catch (error) {
       logger.error(`Error in performRegularSearch: ${error.message}`, error);
@@ -486,10 +514,10 @@ export class MusicPlayer {
    */
   formatDuration(seconds) {
     if (!seconds) return 'Unknown';
-    
+
     const minutes = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    
+
     return `${minutes}:${secs < 10 ? '0' : ''}${secs}`;
   }
 
@@ -500,20 +528,20 @@ export class MusicPlayer {
    */
   extractVideoId(url) {
     if (!url) return null;
-    
+
     // Match common YouTube URL patterns
     const patterns = [
       /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i, // Standard URLs
       /^([a-zA-Z0-9_-]{11})$/ // Direct video IDs
     ];
-    
+
     for (const pattern of patterns) {
       const match = url.match(pattern);
       if (match && match[1]) {
         return match[1];
       }
     }
-    
+
     return null;
   }
 
@@ -526,9 +554,11 @@ export class MusicPlayer {
       connection.destroy();
       logger.info(`Disconnected from voice in guild ${guildId}`);
     }
-    
+
     this.connections.clear();
     this.players.clear();
     this.queues.clear();
   }
+
+
 }

@@ -20,7 +20,7 @@ class YouTubeAPI {
    * @param {string} filterType - 'music', 'video', or 'mixed'
    * @returns {Promise<Array>} Search results
    */
-  async search(query, filterType = 'music') {
+  async search(query, filterType = 'mixed') {
     try {
       // Connect to YouTube if needed
       if (!this.innertube) {
@@ -37,48 +37,58 @@ class YouTubeAPI {
         try {
           if (typeof searchResults.selectType === 'function') {
             console.log(`Using selectType for ${filterType} content`);
-            const filteredResults = await searchResults.selectType(filterType);
-            results = filteredResults.results || [];
+            // If filterType is 'mixed', we don't apply specific filtering
+            if (filterType === 'mixed') {
+              results = searchResults.results || [];
+            } else {
+              const filteredResults = await searchResults.selectType(filterType);
+              results = filteredResults.results || [];
+            }
           } else {
             console.log(`selectType not available, using manual filtering for ${filterType}`);
-            // Manual filtering based on result type
-            results = (searchResults.results || []).filter(item => {
-              if (!item) return false;
-              
-              // Safely handle different types for itemType and itemTitle
-              const itemType = item.type ? String(item.type).toLowerCase() : '';
-              
-              // Handle title safely - ensure it's a string before calling toLowerCase
-              let itemTitle = '';
-              if (item.title) {
-                itemTitle = typeof item.title === 'string' 
-                  ? item.title.toLowerCase() 
-                  : String(item.title).toLowerCase();
-              }
-              
-              // Safely handle author
-              let authorName = '';
-              if (item.author && item.author.name) {
-                authorName = typeof item.author.name === 'string'
-                  ? item.author.name.toLowerCase()
-                  : String(item.author.name).toLowerCase();
-              }
-              
-              if (filterType === 'music') {
-                return itemType.includes('song') || 
-                      itemType.includes('music') || 
-                      itemType.includes('album') ||
-                      itemTitle.includes('official audio') ||
-                      authorName.includes('music') ||
-                      authorName.includes('vevo');
-              } else if (filterType === 'video') {
-                return itemType.includes('video') && 
-                      !itemType.includes('music') &&
-                      !itemTitle.includes('official audio');
-              }
-              
-              return true;
-            });
+            // If filterType is 'mixed', we don't apply filtering
+            if (filterType === 'mixed') {
+              results = searchResults.results || [];
+            } else {
+              // Manual filtering based on result type
+              results = (searchResults.results || []).filter(item => {
+                if (!item) return false;
+                
+                // Safely handle different types for itemType and itemTitle
+                const itemType = item.type ? String(item.type).toLowerCase() : '';
+                
+                // Handle title safely - ensure it's a string before calling toLowerCase
+                let itemTitle = '';
+                if (item.title) {
+                  itemTitle = typeof item.title === 'string' 
+                    ? item.title.toLowerCase() 
+                    : String(item.title).toLowerCase();
+                }
+                
+                // Safely handle author
+                let authorName = '';
+                if (item.author && item.author.name) {
+                  authorName = typeof item.author.name === 'string'
+                    ? item.author.name.toLowerCase()
+                    : String(item.author.name).toLowerCase();
+                }
+                
+                if (filterType === 'music') {
+                  return itemType.includes('song') || 
+                        itemType.includes('music') || 
+                        itemType.includes('album') ||
+                        itemTitle.includes('official audio') ||
+                        authorName.includes('music') ||
+                        authorName.includes('vevo');
+                } else if (filterType === 'video') {
+                  return itemType.includes('video') && 
+                        !itemType.includes('music') &&
+                        !itemTitle.includes('official audio');
+                }
+                
+                return true; // Should not reach here as we handle 'mixed' separately
+              });
+            }
           }
         } catch (filterError) {
           console.warn(`Error filtering ${filterType} results:`, filterError);
@@ -244,6 +254,22 @@ class YouTubeAPI {
       throw error;
     }
   }
+
+  // /**
+  //  * 
+  //  * @param {String} videoId 
+  //  * @returns 
+  //  */
+  // async getLyrics(videoId) {
+  //   try {
+  //     const info = await this.getVideoInfo(videoId);
+  //     const lyrics = info.lyrics || null;
+  //     return lyrics;
+  //   } catch (error) {
+  //     console.error('Get lyrics error:', error);
+  //     throw error;
+  //   }
+  // }
 }
 
 // Export as singleton

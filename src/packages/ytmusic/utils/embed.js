@@ -56,6 +56,16 @@ export const TYPE = {
         color: "#FFA500",
         emoji: "⏹️",
     },
+    SEARCHING : {
+        name: "searching",
+        color: "#FFA500",
+        emoji: "🔍",
+    },
+    TIMEOUT: {
+        name: "timeout",
+        color: "#FFA500",
+        emoji: "⏳",
+    },
 };
 
 export class Embed {
@@ -117,6 +127,57 @@ export class Embed {
             .setThumbnail(thumbnail)
             .setFooter({ text: `Use /play to add more songs ^.^` })
             .setTimestamp();
+    }
+
+    static showQueue(queueSong, isLoop = false, volume = 100) {
+        const queueEmbed = []
+        if (queueSong.length > 1) {
+            const upcomingSongs = queueSong.slice(1, 11).map((song, index) => 
+                `${index + 1}. ${song.title} (${song.duration})`
+            ).join('\n');
+            queueEmbed.push({ name: "Upcoming Songs:", value: upcomingSongs || "No upcoming songs" });
+
+            // Add total count if there are more songs
+            if (queueSong.length > 11) {
+                queueEmbed.push({ name: "Total Songs:", value: `${queueSong.length} songs in queue`, inline: true });
+            }
+        }   
+
+        queueEmbed.push(
+            isLoop ?
+            { name: "Loop:", value: "✅ Enabled", inline: true }:
+            { name: "Loop:", value: "❌ Disabled", inline: true }
+        );
+        queueEmbed.push({ name: "Volume:", value: `${volume}%`, inline: true });
+
+        if (!queueSong || queueSong.length === 0) return null;
+        const e = new EmbedBuilder()
+            .setColor(TYPE.QUEUE.color)
+            .setTitle(`${TYPE.QUEUE.emoji} Music Queue`)
+            .setDescription(`**Now Playing:**\n${queueSong[0].title} (${queueSong[0].duration})`)
+            .setThumbnail(queueSong[0].thumbnail || "https://i.imgur.com/vvHdphW.png")
+            .setFields(queueEmbed)
+            .setFooter({ text: `Use /skip to skip songs ^.^` })
+            .setTimestamp();
+        return e;
+    }
+
+    static showSearchResults(results, query, timeout = 30) {
+        const resultText = results.map((song, index) => 
+            `**${index + 1}.** ${song.title} (${song.duration}) by *${song.author}*`
+          ).join('\n\n');
+        const timestamp = Math.floor(Date.now() / 1000) + timeout;
+        const e = new EmbedBuilder()
+            .setColor(TYPE.SEARCHING.color)
+            .setTitle(`${TYPE.SEARCHING.emoji} Search Results`)
+            .setDescription(`**Search Query:** ${query}\n\n${resultText}`)
+            .setFields([
+                { name: "Timeout:", value: `<t:${timestamp}:R>`, inline: true },
+                { name: "Select:", value: `1-${results.length}`, inline: true },
+            ])
+            .setFooter({ text: `Use /play to add more songs ^.^` })
+            .setTimestamp();
+        return e;
     }
     
 }
