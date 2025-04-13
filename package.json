@@ -12,7 +12,7 @@
     "dev:server": "nodemon src/index.js",
     "dev:client": "vite --config vite.config.js"
   },
-  "repository": {
+  "repository": { 
     "type": "git",
     "url": "git+https://github.com/Riikon-Team/RiikonBot.git"
   },
