@@ -4,6 +4,8 @@ import ytdlpManager from './yt-dlp.js';
 import { getYouTubeAPI } from './youtubei.js';
 import logger from '../../../utils/logger.js';
 import { Embed, TYPE } from './embed.js';
+import { EMOIJS } from '../../../constant/emoijs.js';
+
 
 /**
  * @typedef {Object} Queue
@@ -240,7 +242,7 @@ export class MusicPlayer {
       queue.playing = false;
       if (queue.textChannel) {
         queue.textChannel.send({
-          embeds: [Embed.notify('Queue', 'No more songs in the queue.', TYPE.INFO)],
+          embeds: [Embed.notify('Queue', `No more songs in the queue. ${EMOIJS["5456bocchioverload"]}`, TYPE.INFO)],
         });
       }
     }

@@ -1,70 +1,71 @@
 import { EmbedBuilder } from "discord.js";
+import { EMOIJS } from "../../../constant/emoijs.js";
 
 export const TYPE = {
     INFO: {
         name: "info",
         color: "#00FF00",
-        emoji: "ℹ️",
+        emoji: EMOIJS["66880info"],
     },
     ERROR: {
         name: "error",
         color: "#FF0000",
-        emoji: "❌",
+        emoji: EMOIJS["19463croix"],
     },
     WARNING: {
         name: "warning",
         color: "#FFA500",
-        emoji: "⚠️",
+        emoji: EMOIJS["warning_2"]
     },
     SUCCESS: {
         name: "success",
         color: "#008000",
-        emoji: "✅",
+        emoji: EMOIJS["60226check"]
     },
     DEFAULT: {
         name: "default",
         color: "#0000FF",
-        emoji: "🔵",
+        emoji: EMOIJS["84613like"],
     },
     PLAYING: {
         name: "playing",
         color: "#FFA500",
-        emoji: "🎶",
+        emoji: EMOIJS["21362bocchitherock"]
     },
     QUEUE: {
         name: "queue",
         color: "#FFA500",
-        emoji: "🎶",
+        emoji: EMOIJS["KittyPaw17"],
     },
     PAUSED: {
         name: "paused",
         color: "#FFA500",
-        emoji: "⏸️",
+        emoji: EMOIJS["Pause"]
     },
     RESUMED: {
         name: "resumed",
         color: "#FFA500",
-        emoji: "▶️",
+        emoji: EMOIJS["Resume"],
     },
     SKIPPED: {
         name: "skipped",
         color: "#FFA500",
-        emoji: "⏭️",
+        emoji: EMOIJS["67516moins"],
     },
     STOPPED: {
         name: "stopped",
         color: "#FFA500",
-        emoji: "⏹️",
+        emoji: EMOIJS["14385supprimer"],
     },
     SEARCHING : {
         name: "searching",
         color: "#FFA500",
-        emoji: "🔍",
+        emoji: EMOIJS["34996chercher"],
     },
     TIMEOUT: {
         name: "timeout",
         color: "#FFA500",
-        emoji: "⏳",
+        emoji: EMOIJS["timeout"],
     },
 };
 
