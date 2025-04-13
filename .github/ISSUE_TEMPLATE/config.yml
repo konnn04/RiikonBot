@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Discord Support
+    url: https://discord.gg/6wqDQc9c4g
+    about: Please ask questions and seek support here.
+  - name: Documentation
+    url: https://github.com/Riikon-Team/RiikonBot/wiki
+    about: Check out our documentation before submitting an issue.
