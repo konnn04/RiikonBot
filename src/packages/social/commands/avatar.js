@@ -1,8 +1,5 @@
 import logger from '../../../utils/logger.js'
 import { EmbedBuilder } from 'discord.js'
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath, pathToFileURL } from 'url';
 
 //Command configuration
 export const config = {
