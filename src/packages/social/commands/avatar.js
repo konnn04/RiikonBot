@@ -17,7 +17,7 @@ export const config = {
 }
 
 //Command execution
-export async function execute(interaction, cilent) {
+export async function execute(interaction, client) {
     const targetUser = interaction.options.getUser('user')
     const url = `https://cdn.discordapp.com/avatars/${targetUser.id}/${targetUser.avatar}.png?size=1024`
     const embed = new EmbedBuilder()

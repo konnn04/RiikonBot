@@ -23,7 +23,7 @@ export async function execute(interaction, client) {
     const user = interaction.user
     const embed = new EmbedBuilder()
         .setTitle(`${user.username} is laughing`)
-        .setImage(defaultEmote[Math.floor(Math.random()) * 3])
+        .setImage(defaultEmote[Math.floor(Math.random() * 3) ])
         .setFooter({text: `Send at ${displayCurrentTime()}`})
 
     await interaction.reply({embeds: [embed]})
