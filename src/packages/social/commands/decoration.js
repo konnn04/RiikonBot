@@ -21,7 +21,7 @@ export async function execute(interaction, client) {
     const avatarDecorationData = targetUser.avatarDecorationData
     const embed = new EmbedBuilder()
     if (avatarDecorationData == null) {
-        await interaction.reply(`**${targetUser.username}** have not use any avatar decoration.`)
+        await interaction.reply(`**${targetUser.username}** has not used any avatar decoration.`)
     }
     else {
         const url = `https://cdn.discordapp.com/avatar-decoration-presets/${avatarDecorationData.asset}.png?size=256`

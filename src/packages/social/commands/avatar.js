@@ -22,6 +22,6 @@ export async function execute(interaction, client) {
     const embed = new EmbedBuilder()
         .setTitle("Here is avatar of " + targetUser.username)
         .setImage(url)
-        .setDescription(`[Image URL](${url})`)
+        .setDescription(`[Avatar URL](${url})`)
     await interaction.reply({embeds: [embed]})
 }
