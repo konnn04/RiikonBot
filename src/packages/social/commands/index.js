@@ -85,7 +85,7 @@ export async function getCommands() {
                     .setRequired(option.required || false)
 
                   if (option.maxValue && typeof option.maxValue === 'number') opt.setMaxValue(option.maxValue)
-                  if (option.minValue && typeof option.maxValue === 'number') opt.setMinValue(option.minValue)
+                  if (option.minValue && typeof option.minValue === 'number') opt.setMinValue(option.minValue)
                   return opt
                 })
               }

@@ -1,9 +1,5 @@
 import { displayCurrentTime } from '../../../utils/commandUtilities.js';
-import logger from '../../../utils/logger.js'
 import { EmbedBuilder } from 'discord.js'
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath, pathToFileURL } from 'url';
 
 export const config = {
     name: 'pwp',

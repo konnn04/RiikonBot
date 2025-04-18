@@ -1,6 +1,3 @@
-import logger from '../../../utils/logger.js'
-import { EmbedBuilder } from 'discord.js'
-
 //Command configuration
 export const config = {
     name: 'roll',

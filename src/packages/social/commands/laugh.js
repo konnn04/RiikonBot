@@ -1,11 +1,7 @@
 import { displayCurrentTime } from '../../../utils/commandUtilities.js';
-import logger from '../../../utils/logger.js'
 import { EmbedBuilder } from 'discord.js'
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath, pathToFileURL } from 'url';
 
-//Just used if asset/laught not exist
+//Just used if asset/laugh not exist
 //Just temporary code too
 const defaultEmote = ["https://media1.giphy.com/media/PQm9SiQXZh6zoIrWs7/200w.gif?cid=6c09b952l3iad3nfz21372a6l5a2assunycqnho0t4d4twda&ep=v1_gifs_search&rid=200w.gif&ct=g",
     "https://media.tenor.com/8nSbJK3j7EUAAAAM/laugh-anime.gif",
